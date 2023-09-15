@@ -5,6 +5,7 @@ use serde::{self, de::Error, Deserialize, Deserializer, Serialize, Serializer};
 #[serde(rename_all = "camelCase")]
 pub struct Config {
     pub catalog: String,
+    pub bucket: String,
     pub issuer: String,
     pub client_id: String
 }

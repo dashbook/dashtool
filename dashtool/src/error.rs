@@ -3,6 +3,8 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error(transparent)]
+    Anyhow(#[from] anyhow::Error),
+    #[error(transparent)]
     Serde(#[from] serde_json::Error),
     #[error(transparent)]
     IO(#[from] std::io::Error),
@@ -40,6 +42,8 @@ pub enum Error {
     SQLParser(#[from] sqlparser::parser::ParserError),
     #[error(transparent)]
     DashbookCatalog(#[from] dashbook_catalog::error::Error),
+    #[error(transparent)]
+    Datafusion(#[from] datafusion_common::DataFusionError),
     #[error("No {0} token revieved.")]
     NoToken(String),
     #[error("{0}")]

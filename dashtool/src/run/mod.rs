@@ -3,14 +3,21 @@ use std::{collections::HashMap, fs, sync::Arc};
 use dashbook_catalog::{get_catalog, get_role};
 use futures::lock::Mutex;
 use git2::{Delta, Repository};
-use iceberg_rust::catalog::Catalog;
+use iceberg_rust::{
+    catalog::{identifier::Identifier, Catalog},
+    model::schema::SchemaV2,
+    view::view_builder::ViewBuilder,
+};
 
 use crate::{
     config::{Config, State},
     error::Error,
 };
 
-use self::openid::authorization;
+use self::{
+    openid::authorization,
+    sql::{find_relations, get_schema},
+};
 
 mod openid;
 mod sql;
@@ -101,6 +108,38 @@ pub async fn run() -> Result<(), Error> {
                             }
                         }
                     };
+
+                    let sql = fs::read_to_string(path)?;
+
+                    let relations = find_relations(&sql)?;
+                    let fields = get_schema(&sql, relations, catalog.clone()).await?;
+                    let schema = SchemaV2 {
+                        schema_id: 0,
+                        identifier_field_ids: None,
+                        fields,
+                    };
+                    let base_path = config.bucket.to_string()
+                        + "/"
+                        + path
+                            .to_str()
+                            .ok_or(Error::Text("No new file in delta".to_string()))?
+                            .trim_start_matches("/")
+                            .trim_end_matches(".sql");
+                    let identifier = path
+                        .to_str()
+                        .ok_or(Error::Text("No new file in delta".to_string()))?
+                        .trim_start_matches("/")
+                        .trim_end_matches(".sql")
+                        .replace("/", ".");
+                    ViewBuilder::new_metastore_view(
+                        &sql,
+                        &base_path,
+                        schema,
+                        Identifier::parse(&identifier)?,
+                        catalog,
+                    )?
+                    .commit()
+                    .await?;
                 } else if path.ends_with("target.json") {
                     ()
                 }
