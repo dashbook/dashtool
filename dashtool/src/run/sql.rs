@@ -1,6 +1,6 @@
 use std::{ops::ControlFlow, sync::Arc};
 
-use arrow::datatypes::{FieldRef, Schema as ArrowSchema};
+use arrow_schema::{FieldRef, Schema as ArrowSchema};
 use datafusion_iceberg::catalog::context::IcebergContext;
 use datafusion_sql::planner::SqlToRel;
 use iceberg_rust::{catalog::Catalog, model::types::StructType};

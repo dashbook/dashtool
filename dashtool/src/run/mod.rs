@@ -11,6 +11,7 @@ use iceberg_rust::{
 
 use crate::{
     config::{Config, State},
+    dag::{get_dag, Node},
     error::Error,
 };
 
@@ -29,6 +30,8 @@ pub async fn run() -> Result<(), Error> {
 
     let state_json = fs::read_to_string(".dashtool/state.json")?;
     let state: State = serde_json::from_str(&state_json)?;
+
+    let mut dag = get_dag()?;
 
     // Inspect git repo
     let repo = Repository::open(".")?;
@@ -112,7 +115,7 @@ pub async fn run() -> Result<(), Error> {
                     let sql = fs::read_to_string(path)?;
 
                     let relations = find_relations(&sql)?;
-                    let fields = get_schema(&sql, relations, catalog.clone()).await?;
+                    let fields = get_schema(&sql, relations.clone(), catalog.clone()).await?;
                     let schema = SchemaV2 {
                         schema_id: 0,
                         identifier_field_ids: None,
@@ -140,6 +143,7 @@ pub async fn run() -> Result<(), Error> {
                     )?
                     .commit()
                     .await?;
+                    dag.add_node(Node::new(&identifier), &relations);
                 } else if path.ends_with("target.json") {
                     ()
                 }
@@ -147,6 +151,10 @@ pub async fn run() -> Result<(), Error> {
             _ => (),
         }
     }
+
+    let json = serde_json::to_string(&dag)?;
+
+    fs::write(".dashtool/dag.json", json)?;
 
     Ok(())
 }
