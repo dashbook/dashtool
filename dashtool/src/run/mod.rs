@@ -13,15 +13,13 @@ use crate::{
     config::{Config, State},
     dag::{get_dag, Node},
     error::Error,
-};
-
-use self::{
-    openid::authorization,
+    git::diff,
     sql::{find_relations, get_schema},
 };
 
+use self::openid::authorization;
+
 mod openid;
-mod sql;
 
 pub async fn run() -> Result<(), Error> {
     // Load config files
@@ -36,24 +34,7 @@ pub async fn run() -> Result<(), Error> {
     // Inspect git repo
     let repo = Repository::open(".")?;
 
-    let previous_id = state.last_commit.as_ref();
-
-    let current_object = repo.revparse_single("HEAD")?;
-
-    let current_id = current_object.id();
-
-    let previous_commit = previous_id
-        .cloned()
-        .map(|x| repo.find_commit(x))
-        .transpose()?
-        .map(|x| x.tree())
-        .transpose()?;
-
-    let current_commit = repo.find_commit(current_id)?.tree()?;
-
-    let diff = repo.diff_tree_to_tree(previous_commit.as_ref(), Some(&current_commit), None)?;
-
-    let deltas = diff.deltas();
+    let diff = diff(&repo, &state.last_commit)?;
 
     let catalogs: Arc<Mutex<HashMap<String, Arc<dyn Catalog>>>> =
         Arc::new(Mutex::new(HashMap::new()));
@@ -64,7 +45,7 @@ pub async fn run() -> Result<(), Error> {
 
     let (access_token, id_token) = authorization(&config.issuer, &config.client_id).await?;
 
-    for delta in deltas {
+    for delta in diff.deltas() {
         match delta.status() {
             Delta::Added => {
                 let path = delta
@@ -143,7 +124,7 @@ pub async fn run() -> Result<(), Error> {
                     )?
                     .commit()
                     .await?;
-                    dag.add_node(Node::new(&identifier), &relations);
+                    dag.add_node_with_children(Node::new(&identifier), &relations)?;
                 } else if path.ends_with("target.json") {
                     ()
                 }

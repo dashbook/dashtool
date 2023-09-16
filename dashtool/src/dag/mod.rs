@@ -1,6 +1,5 @@
 use std::{collections::HashMap, fs};
 
-use iceberg_rust::catalog::identifier;
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 use serde::{Deserialize, Serialize};
 
@@ -26,7 +25,20 @@ pub struct Dag {
 }
 
 impl Dag {
-    pub(crate) fn add_node(&mut self, node: Node, children: &[String]) {
+    pub fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+            dag: StableDiGraph::new(),
+        }
+    }
+}
+
+impl Dag {
+    pub(crate) fn add_node_with_children(
+        &mut self,
+        node: Node,
+        children: &[String],
+    ) -> Result<(), Error> {
         let identifier = node.identifier.clone();
         let idx = self.dag.add_node(node);
         self.map.insert(identifier, idx);
@@ -38,7 +50,30 @@ impl Dag {
             for child in indices {
                 self.dag.add_edge(idx, child, ());
             }
+            Ok(())
+        } else {
+            Err(Error::Text("Nodes not in graph.".to_string()))
         }
+    }
+    pub(crate) fn add_node(&mut self, node: Node) {
+        let identifier = node.identifier.clone();
+        let idx = self.dag.add_node(node);
+        self.map.insert(identifier, idx);
+    }
+    pub(crate) fn add_edge(&mut self, a: &str, b: &str) -> Result<(), Error> {
+        let a = self
+            .map
+            .get(a)
+            .cloned()
+            .ok_or(Error::Text("Node not in graph.".to_string()))?;
+        let b = self
+            .map
+            .get(b)
+            .cloned()
+            .ok_or(Error::Text("Node not in graph.".to_string()))?;
+
+        self.dag.add_edge(a, b, ());
+        Ok(())
     }
 }
 

@@ -1,4 +1,4 @@
-use dashtool::{error::Error, run::run};
+use dashtool::{error::Error, init::init, run::run};
 
 use clap::{Parser, Subcommand};
 
@@ -11,6 +11,7 @@ struct Args {
 #[derive(Subcommand)]
 enum Commands {
     Run,
+    Init,
 }
 
 #[tokio::main]
@@ -19,5 +20,6 @@ async fn main() -> Result<(), Error> {
 
     match args.commands {
         Commands::Run => run().await,
+        Commands::Init => init().await,
     }
 }
