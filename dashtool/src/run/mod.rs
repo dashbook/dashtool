@@ -60,105 +60,109 @@ pub async fn run() -> Result<(), Error> {
             let mut tabular_sender = tabular_sender.clone();
             let mut singer_sender = singer_sender.clone();
             async move {
-                match delta.status() {
-                    Delta::Added => {
-                        let path = delta
-                            .new_file()
-                            .path()
-                            .ok_or(Error::Text("No new file in delta".to_string()))?;
-                        if path.ends_with(".sql") {
-                            let table_name = path
-                                .file_name()
-                                .ok_or(Error::Text("Path doesn't contain file.".to_string()))?
-                                .to_str()
-                                .unwrap();
-                            let table_namespace = path
-                                .parent()
-                                .ok_or(Error::Text("Path doesn't have parent folder.".to_string()))?
-                                .to_str()
-                                .unwrap();
+                let path = delta
+                    .new_file()
+                    .path()
+                    .ok_or(Error::Text("No new file in delta".to_string()))?;
+                let is_tabular = if path.ends_with(".sql") {
+                    Some(true)
+                } else if path.ends_with("target.json") {
+                    Some(false)
+                } else {
+                    None
+                };
+                match (delta.status(), is_tabular) {
+                    (Delta::Added, Some(true)) => {
+                        let table_name = path
+                            .file_name()
+                            .ok_or(Error::Text("Path doesn't contain file.".to_string()))?
+                            .to_str()
+                            .unwrap();
+                        let table_namespace = path
+                            .parent()
+                            .ok_or(Error::Text("Path doesn't have parent folder.".to_string()))?
+                            .to_str()
+                            .unwrap();
 
-                            let role = get_role(
-                                &access_token,
-                                &catalog_name,
-                                table_namespace,
-                                table_name,
-                                "write",
-                            )
-                            .await?;
+                        let role = get_role(
+                            &access_token,
+                            &catalog_name,
+                            table_namespace,
+                            table_name,
+                            "write",
+                        )
+                        .await?;
 
-                            let catalog = {
-                                let mut catalogs = catalogs.lock().await;
-                                match catalogs.get(&role) {
-                                    Some(catalog) => catalog.clone(),
-                                    None => {
-                                        let catalog = get_catalog(
-                                            &config.catalog,
-                                            &access_token,
-                                            &id_token,
-                                            &table_namespace,
-                                            &table_name,
-                                            &role,
-                                        )
-                                        .await?;
-                                        catalogs.insert(role, catalog.clone());
-                                        catalog
-                                    }
+                        let catalog = {
+                            let mut catalogs = catalogs.lock().await;
+                            match catalogs.get(&role) {
+                                Some(catalog) => catalog.clone(),
+                                None => {
+                                    let catalog = get_catalog(
+                                        &config.catalog,
+                                        &access_token,
+                                        &id_token,
+                                        &table_namespace,
+                                        &table_name,
+                                        &role,
+                                    )
+                                    .await?;
+                                    catalogs.insert(role, catalog.clone());
+                                    catalog
                                 }
-                            };
+                            }
+                        };
 
-                            let sql = fs::read_to_string(path)?;
+                        let sql = fs::read_to_string(path)?;
 
-                            let relations = find_relations(&sql)?;
-                            let fields =
-                                get_schema(&sql, relations.clone(), catalog.clone()).await?;
-                            let schema = SchemaV2 {
-                                schema_id: 0,
-                                identifier_field_ids: None,
-                                fields,
-                            };
-                            let base_path = config.bucket.to_string()
-                                + "/"
-                                + path
-                                    .to_str()
-                                    .ok_or(Error::Text("No new file in delta".to_string()))?
-                                    .trim_start_matches("/")
-                                    .trim_end_matches(".sql");
-                            let identifier = path
+                        let relations = find_relations(&sql)?;
+                        let fields = get_schema(&sql, relations.clone(), catalog.clone()).await?;
+                        let schema = SchemaV2 {
+                            schema_id: 0,
+                            identifier_field_ids: None,
+                            fields,
+                        };
+                        let base_path = config.bucket.to_string()
+                            + "/"
+                            + path
                                 .to_str()
                                 .ok_or(Error::Text("No new file in delta".to_string()))?
                                 .trim_start_matches("/")
-                                .trim_end_matches(".sql")
-                                .replace("/", ".");
-                            ViewBuilder::new_metastore_view(
-                                &sql,
-                                &base_path,
-                                schema,
-                                Identifier::parse(&identifier)?,
-                                catalog,
-                            )?
-                            .commit()
-                            .await?;
-                            tabular_sender.send((identifier, relations)).await?;
-                        } else if path.ends_with("target.json") {
-                            let parent = Path::new(path)
-                                .parent()
-                                .ok_or(Error::Anyhow(anyhow!(
-                                    "target.json must be inside a subfolder."
-                                )))?
-                                .to_str()
-                                .ok_or(Error::Anyhow(anyhow!(
-                                    "Failed to convert path to string."
-                                )))?;
-                            let tap_path = parent.to_string() + "/tap.json";
-                            let tap = fs::read_to_string(&tap_path)?;
-                            let target_json = fs::read_to_string(path)?;
-                            let target: SingerConfig = serde_json::from_str(&target_json)?;
-                            singer_sender
-                                .send(Node::Singer(Singer::new(parent, tap, target)))
-                                .await?;
-                        }
+                                .trim_end_matches(".sql");
+                        let identifier = path
+                            .to_str()
+                            .ok_or(Error::Text("No new file in delta".to_string()))?
+                            .trim_start_matches("/")
+                            .trim_end_matches(".sql")
+                            .replace("/", ".");
+                        ViewBuilder::new_metastore_view(
+                            &sql,
+                            &base_path,
+                            schema,
+                            Identifier::parse(&identifier)?,
+                            catalog,
+                        )?
+                        .commit()
+                        .await?;
+                        tabular_sender.send((identifier, relations)).await?;
                     }
+                    (Delta::Added, Some(false)) => {
+                        let parent = Path::new(path)
+                            .parent()
+                            .ok_or(Error::Anyhow(anyhow!(
+                                "target.json must be inside a subfolder."
+                            )))?
+                            .to_str()
+                            .ok_or(Error::Anyhow(anyhow!("Failed to convert path to string.")))?;
+                        let tap_path = parent.to_string() + "/tap.json";
+                        let tap = fs::read_to_string(&tap_path)?;
+                        let target_json = fs::read_to_string(path)?;
+                        let target: SingerConfig = serde_json::from_str(&target_json)?;
+                        singer_sender
+                            .send(Node::Singer(Singer::new(parent, tap, target)))
+                            .await?;
+                    }
+                    (_, None) => (),
                     _ => (),
                 }
                 Ok(())
