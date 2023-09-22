@@ -34,27 +34,6 @@ impl Dag {
 }
 
 impl Dag {
-    pub(crate) fn add_node_with_children(
-        &mut self,
-        node: Node,
-        children: &[String],
-    ) -> Result<(), Error> {
-        let identifier = node.identifier.clone();
-        let idx = self.dag.add_node(node);
-        self.map.insert(identifier, idx);
-
-        let opt: Option<Vec<NodeIndex>> =
-            children.iter().map(|x| self.map.get(x).cloned()).collect();
-
-        if let Some(indices) = opt {
-            for child in indices {
-                self.dag.add_edge(idx, child, ());
-            }
-            Ok(())
-        } else {
-            Err(Error::Text("Nodes not in graph.".to_string()))
-        }
-    }
     pub(crate) fn add_node(&mut self, node: Node) {
         let identifier = node.identifier.clone();
         let idx = self.dag.add_node(node);
