@@ -1,5 +1,6 @@
-use std::{collections::HashMap, fs, sync::Arc};
+use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
+use anyhow::anyhow;
 use dashbook_catalog::{get_catalog, get_role};
 use futures::{channel::mpsc::unbounded, lock::Mutex, stream, SinkExt, StreamExt, TryStreamExt};
 use git2::{Delta, Repository};
@@ -8,10 +9,11 @@ use iceberg_rust::{
     model::schema::SchemaV2,
     view::view_builder::ViewBuilder,
 };
+use target_iceberg_nessie::config::Config as SingerConfig;
 
 use crate::{
     config::{Config, State},
-    dag::{get_dag, Node, Tabular},
+    dag::{get_dag, Node, Singer, Tabular},
     error::Error,
     git::diff,
     sql::{find_relations, get_schema},
@@ -41,7 +43,8 @@ pub async fn run() -> Result<(), Error> {
         "Catalog url doesn't contain catalog name.".to_string(),
     ))?;
 
-    let (node_sender, node_reciever) = unbounded();
+    let (tabular_sender, tabular_reciever) = unbounded();
+    let (singer_sender, singer_reciever) = unbounded();
 
     let (access_token, id_token) = authorization(&config.issuer, &config.client_id)
         .await
@@ -54,7 +57,8 @@ pub async fn run() -> Result<(), Error> {
             let config = config.clone();
             let access_token = access_token.clone();
             let id_token = id_token.clone();
-            let node_sender = node_sender.clone();
+            let mut tabular_sender = tabular_sender.clone();
+            let mut singer_sender = singer_sender.clone();
             async move {
                 match delta.status() {
                     Delta::Added => {
@@ -135,9 +139,24 @@ pub async fn run() -> Result<(), Error> {
                             )?
                             .commit()
                             .await?;
-                            node_sender.clone().send((identifier, relations)).await?;
+                            tabular_sender.send((identifier, relations)).await?;
                         } else if path.ends_with("target.json") {
-                            ()
+                            let parent = Path::new(path)
+                                .parent()
+                                .ok_or(Error::Anyhow(anyhow!(
+                                    "target.json must be inside a subfolder."
+                                )))?
+                                .to_str()
+                                .ok_or(Error::Anyhow(anyhow!(
+                                    "Failed to convert path to string."
+                                )))?;
+                            let tap_path = parent.to_string() + "/tap.json";
+                            let tap = fs::read_to_string(&tap_path)?;
+                            let target_json = fs::read_to_string(path)?;
+                            let target: SingerConfig = serde_json::from_str(&target_json)?;
+                            singer_sender
+                                .send(Node::Singer(Singer::new(parent, tap, target)))
+                                .await?;
                         }
                     }
                     _ => (),
@@ -147,18 +166,25 @@ pub async fn run() -> Result<(), Error> {
         })
         .await?;
 
-    node_sender.close_channel();
+    tabular_sender.close_channel();
+    singer_sender.close_channel();
 
     let mut dag = get_dag()?;
 
-    let nodes: HashMap<String, Vec<String>> =
-        HashMap::from_iter(node_reciever.collect::<Vec<_>>().await);
+    let singers = singer_reciever.collect::<Vec<_>>().await;
 
-    for node in nodes.keys() {
+    let tabs: HashMap<String, Vec<String>> =
+        HashMap::from_iter(tabular_reciever.collect::<Vec<_>>().await);
+
+    for singer in singers {
+        dag.add_node(singer)
+    }
+
+    for node in tabs.keys() {
         dag.add_node(Node::Tabular(Tabular::new(node)))
     }
 
-    for (node, children) in nodes {
+    for (node, children) in tabs {
         for child in children {
             dag.add_edge(&node, &child)?
         }
