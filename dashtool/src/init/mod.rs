@@ -1,7 +1,9 @@
+use anyhow::anyhow;
 use std::{fs, path::Path};
+use target_iceberg_nessie::config::Config as SingerConfig;
 
 use crate::{
-    dag::{Dag, Node},
+    dag::{Dag, Node, Singer, Tabular},
     error::Error,
     sql::find_relations,
 };
@@ -45,19 +47,25 @@ fn traverse<P: AsRef<Path>>(
 
 fn add_node(path: &str, dag: &mut Dag) -> Result<(), Error> {
     if path.ends_with("target.json") {
-        dag.add_node(Node::new(
-            &path
-                .trim_end_matches("/target.json")
-                .trim_start_matches("/")
-                .replace("/", "."),
-        ))
+        let parent = Path::new(path)
+            .parent()
+            .ok_or(Error::Anyhow(anyhow!(
+                "target.json must be inside a subfolder."
+            )))?
+            .to_str()
+            .ok_or(Error::Anyhow(anyhow!("Failed to convert path to string.")))?;
+        let tap_path = parent.to_string() + "/tap.json";
+        let tap = fs::read_to_string(&tap_path)?;
+        let target_json = fs::read_to_string(path)?;
+        let target: SingerConfig = serde_json::from_str(&target_json)?;
+        dag.add_node(Node::Singer(Singer::new(&parent, tap, target)))
     } else if path.ends_with(".sql") {
-        dag.add_node(Node::new(
+        dag.add_node(Node::Tabular(Tabular::new(
             &path
                 .trim_end_matches(".sql")
                 .trim_start_matches("/")
                 .replace("/", "."),
-        ))
+        )))
     }
     Ok(())
 }

@@ -11,7 +11,7 @@ use iceberg_rust::{
 
 use crate::{
     config::{Config, State},
-    dag::{get_dag, Node},
+    dag::{get_dag, Node, Tabular},
     error::Error,
     git::diff,
     sql::{find_relations, get_schema},
@@ -155,7 +155,7 @@ pub async fn run() -> Result<(), Error> {
         HashMap::from_iter(node_reciever.collect::<Vec<_>>().await);
 
     for node in nodes.keys() {
-        dag.add_node(Node::new(node))
+        dag.add_node(Node::Tabular(Tabular::new(node)))
     }
 
     for (node, children) in nodes {
