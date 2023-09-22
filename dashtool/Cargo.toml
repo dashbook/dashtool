@@ -6,23 +6,24 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.4.2", features = ["derive"] }
+clap = { version = "4.4", features = ["derive"] }
 dashbook-catalog = { git = "https://github.com/dashbook/dashbook-catalog.git" }
 datafusion_iceberg = { git = "https://github.com/JanKaul/iceberg-rust_archive.git" }
 datafusion-sql = "30.0.0"
-git2 = "0.18.0"
+git2 = "0.18"
 iceberg-rust = { git = "https://github.com/JanKaul/iceberg-rust_archive.git" }
 iceberg-catalog-nessie = { git = "https://github.com/dashbook/iceberg-catalog-nessie-rust.git" }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.105"
-sqlparser = { version = "0.36.1", features = ["visitor"] }
-openidconnect = "3.3.1"
-tokio = { version = "1.32.0", features = ["macros", "rt-multi-thread"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlparser = { version = "0.36", features = ["visitor"] }
+openidconnect = "3.3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 futures = "0.3.28"
-thiserror = "1.0"
-reqwest = "0.11.20"
-url = "2.4.1"
-anyhow = "1.0"
+thiserror = "1"
+reqwest = "0.11"
+url = "2.4"
+anyhow = "1"
 datafusion-common = "30.0.0"
-petgraph = { version = "0.6.4", features = ["serde-1"] }
+petgraph = { version = "0.6", features = ["serde-1"] }
 arrow-schema = "45.0.0"
+target-iceberg-nessie = { git = "https://github.com/dashbook/target-iceberg-nessie.git" }
