@@ -98,9 +98,10 @@ impl Dag {
     }
 }
 
-pub fn get_dag() -> Result<Dag, Error> {
-    let dag = if fs::metadata(".dashtool/dag.json").is_ok() {
-        let json = fs::read_to_string(".dashtool/dag.json")?;
+pub fn get_dag(branch: &str) -> Result<Dag, Error> {
+    let path = ".dashtool/dags/".to_string() + branch + ".json";
+    let dag = if fs::metadata(&path).is_ok() {
+        let json = fs::read_to_string(&path)?;
         let dag: Dag = serde_json::from_str(&json)?;
         dag
     } else {

@@ -1,15 +1,19 @@
 use anyhow::anyhow;
+use git2::Repository;
 use std::{fs, path::Path};
 use target_iceberg_nessie::config::Config as SingerConfig;
 
 use crate::{
     dag::{Dag, Node, Singer, Tabular},
     error::Error,
+    git::branch,
     sql::find_relations,
 };
 
 pub async fn init() -> Result<(), Error> {
-    if fs::metadata(".dashtool/dag.json").is_ok() {
+    let repo = Repository::open(".")?;
+    let branch = branch(&repo)?;
+    if fs::metadata(".dashtool/dags/".to_string() + &branch + ".json").is_ok() {
         return Err(Error::Text("Dag is already initialized.".to_string()));
     }
 
@@ -20,7 +24,7 @@ pub async fn init() -> Result<(), Error> {
 
     let json = serde_json::to_string(&dag)?;
 
-    fs::write(".dashtool/dag.json", json)?;
+    fs::write(".dashtool/dags/".to_string() + &branch + ".json", json)?;
 
     Ok(())
 }

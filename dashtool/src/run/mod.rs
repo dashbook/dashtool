@@ -3,7 +3,7 @@ use std::{collections::HashMap, fs, path::Path, sync::Arc};
 use anyhow::anyhow;
 use dashbook_catalog::{get_catalog, get_role};
 use futures::{channel::mpsc::unbounded, lock::Mutex, stream, SinkExt, StreamExt, TryStreamExt};
-use git2::{Delta, Repository};
+use git2::{BranchType, Delta, Diff, Repository};
 use iceberg_rust::{
     catalog::{identifier::Identifier, Catalog},
     model::schema::SchemaV2,
@@ -13,9 +13,10 @@ use target_iceberg_nessie::config::Config as SingerConfig;
 
 use crate::{
     config::{Config, State},
-    dag::{get_dag, Node, Singer, Tabular},
+    dag::{get_dag, Dag, Node, Singer, Tabular},
     error::Error,
-    git::diff,
+    git::{branch, diff},
+    run::openid::authentication,
     sql::{find_relations, get_schema},
 };
 
@@ -28,14 +29,42 @@ pub async fn run() -> Result<(), Error> {
     let config_json = fs::read_to_string("dashtool.json")?;
     let config: Arc<Config> = Arc::new(serde_json::from_str(&config_json)?);
 
-    let state_json = fs::read_to_string(".dashtool/state.json")?;
-    let state: State = serde_json::from_str(&state_json)?;
+    if fs::metadata(".dashtool/refresh.jwt").is_err() {
+        authentication(&config.issuer, &config.client_id).await?;
+    }
+
+    let state: Option<State> = fs::read_to_string(".dashtool/state.json")
+        .ok()
+        .and_then(|x| serde_json::from_str(&x).ok());
 
     // Inspect git repo
     let repo = Repository::open(".")?;
 
-    let diff = diff(&repo, &state.last_commit)?;
+    let branch = branch(&repo)?;
 
+    let current_id = repo
+        .find_branch(&branch, BranchType::Local)?
+        .into_reference()
+        .target();
+
+    let last_id = state.and_then(|state| state.commits.get(&branch).cloned());
+
+    let diff = diff(&repo, &last_id, &current_id)?;
+
+    let branch_dag = create_dag(diff, config.clone(), &branch).await?;
+
+    let json = serde_json::to_string(&branch_dag)?;
+
+    fs::write(".dashtool/dags/".to_string() + &branch + ".json", json)?;
+
+    Ok(())
+}
+
+async fn create_dag<'repo>(
+    diff: Diff<'repo>,
+    config: Arc<Config>,
+    branch: &str,
+) -> Result<Dag, Error> {
     let catalogs: Arc<Mutex<HashMap<String, Arc<dyn Catalog>>>> =
         Arc::new(Mutex::new(HashMap::new()));
 
@@ -173,7 +202,7 @@ pub async fn run() -> Result<(), Error> {
     tabular_sender.close_channel();
     singer_sender.close_channel();
 
-    let mut dag = get_dag()?;
+    let mut dag = get_dag(branch)?;
 
     let singers = singer_reciever.collect::<Vec<_>>().await;
 
@@ -194,9 +223,5 @@ pub async fn run() -> Result<(), Error> {
         }
     }
 
-    let json = serde_json::to_string(&dag)?;
-
-    fs::write(".dashtool/dag.json", json)?;
-
-    Ok(())
+    Ok(dag)
 }

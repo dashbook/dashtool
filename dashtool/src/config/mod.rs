@@ -1,5 +1,7 @@
+use std::collections::HashMap;
+
 use git2::Oid;
-use serde::{self, de::Error, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{self, Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -7,28 +9,55 @@ pub struct Config {
     pub catalog: String,
     pub bucket: String,
     pub issuer: String,
-    pub client_id: String
+    pub client_id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    try_from = "crate::config::_serde::State",
+    into = "crate::config::_serde::State"
+)]
 pub struct State {
-    #[serde(
-        default,
-        serialize_with = "serialize_oid",
-        deserialize_with = "deserialize_oid"
-    )]
-    pub last_commit: Option<Oid>,
+    pub commits: HashMap<String, Oid>,
 }
 
-fn deserialize_oid<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Oid>, D::Error> {
-    let s: Option<String> = Option::deserialize(deserializer)?;
-    s.as_deref()
-        .map(Oid::from_str)
-        .transpose()
-        .map_err(D::Error::custom)
-}
+mod _serde {
+    use std::collections::HashMap;
 
-fn serialize_oid<S: Serializer>(oid: &Option<Oid>, serializer: S) -> Result<S::Ok, S::Error> {
-    oid.as_ref().map(ToString::to_string).serialize(serializer)
+    use git2::Oid;
+    use serde::{Deserialize, Serialize};
+
+    use crate::error::Error;
+
+    #[derive(Debug, Serialize, Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct State {
+        commits: HashMap<String, String>,
+    }
+
+    impl TryFrom<State> for super::State {
+        type Error = Error;
+        fn try_from(value: State) -> Result<Self, Error> {
+            Ok(super::State {
+                commits: HashMap::from_iter(
+                    value
+                        .commits
+                        .into_iter()
+                        .map(|(k, v)| Ok((k, Oid::from_str(&v)?)))
+                        .collect::<Result<Vec<_>, Error>>()?,
+                ),
+            })
+        }
+    }
+
+    impl From<super::State> for State {
+        fn from(value: super::State) -> Self {
+            State {
+                commits: HashMap::from_iter(
+                    value.commits.into_iter().map(|(k, v)| (k, v.to_string())),
+                ),
+            }
+        }
+    }
 }
