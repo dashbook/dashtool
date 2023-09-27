@@ -79,7 +79,7 @@ async fn create_dag<'repo>(
 
     stream::iter(diff.deltas())
         .map(Ok::<_, Error>)
-        .try_for_each_concurrent(Some(8), |delta| {
+        .try_for_each(|delta| {
             let catalogs = catalogs.clone();
             let config = config.clone();
             let access_token = access_token.clone();
