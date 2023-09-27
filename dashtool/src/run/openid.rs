@@ -1,5 +1,6 @@
-use std::fs;
+use std::{fs, str::FromStr};
 
+use anyhow::anyhow;
 use openidconnect::{
     core::{CoreClient, CoreProviderMetadata},
     reqwest::async_http_client,
@@ -8,7 +9,7 @@ use openidconnect::{
     TokenResponse,
 };
 
-use crate::error::Error;
+use crate::{config::Config, error::Error};
 
 pub async fn authentication(issuer_url: &str, client_id: &str) -> Result<String, Error> {
     let provider_metadata = CoreProviderMetadata::discover_async(
@@ -43,18 +44,14 @@ pub async fn authentication(issuer_url: &str, client_id: &str) -> Result<String,
     let refresh_token = tokens
         .refresh_token()
         .ok_or(Error::NoToken("device".to_string()))?;
-
-    fs::write(".dashtool/refresh.jwt", refresh_token.secret())?;
     Ok(refresh_token.secret().to_string())
 }
 
-pub async fn authorization(issuer_url: &str, client_id: &str) -> Result<(String, String), Error> {
-    let refresh_token = if fs::metadata(".dashtool/refresh.jwt").is_ok() {
-        fs::read_to_string(".dashtool/refresh.jwt").map_err(|err| Error::from(err))
-    } else {
-        authentication(issuer_url, client_id).await
-    }?;
-
+pub async fn authorization(
+    issuer_url: &str,
+    client_id: &str,
+    refresh_token: &str,
+) -> Result<(String, String), Error> {
     let provider_metadata = CoreProviderMetadata::discover_async(
         IssuerUrl::new(issuer_url.to_string())?,
         async_http_client,
@@ -68,7 +65,7 @@ pub async fn authorization(issuer_url: &str, client_id: &str) -> Result<(String,
     .enable_openid_scope();
 
     let response = client
-        .exchange_refresh_token(&RefreshToken::new(refresh_token))
+        .exchange_refresh_token(&RefreshToken::new(refresh_token.to_owned()))
         .request_async(async_http_client)
         .await?;
 
@@ -77,4 +74,30 @@ pub async fn authorization(issuer_url: &str, client_id: &str) -> Result<(String,
         .id_token()
         .ok_or(Error::NoToken("id".to_string()))?;
     Ok((access_token, id_token.to_string()))
+}
+
+pub(crate) async fn get_refresh_token(config: &Config) -> Result<String, Error> {
+    #[cfg(not(target_arch = "wasm32"))]
+    let refresh_token = match fs::read_to_string(
+        dirs::config_local_dir()
+            .and_then(|x| Some(String::from_str(x.to_str()?).ok()?))
+            .ok_or(Error::Anyhow(anyhow!("Failed to get config directory.")))?
+            + "/dashtool/refresh.jwt",
+    ) {
+        Ok(token) => token,
+        Err(_) => {
+            let refresh_token = authentication(&config.issuer, &config.client_id).await?;
+            fs::write(
+                dirs::config_local_dir()
+                    .and_then(|x| Some(String::from_str(x.to_str()?).ok()?))
+                    .ok_or(Error::Anyhow(anyhow!("Failed to get config directory.")))?
+                    + "/dashtool/refresh.jwt",
+                &refresh_token,
+            )?;
+            refresh_token
+        }
+    };
+    #[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
+    let refresh_token = std::env::var("REFRESH_TOKEN")?;
+    Ok(refresh_token)
 }

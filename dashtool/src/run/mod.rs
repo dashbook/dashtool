@@ -16,11 +16,10 @@ use crate::{
     dag::{get_dag, Dag, Node, Singer, Tabular},
     error::Error,
     git::{branch, diff},
-    run::openid::authentication,
     sql::{find_relations, get_schema},
 };
 
-use self::openid::authorization;
+use self::openid::{authorization, get_refresh_token};
 
 mod openid;
 
@@ -29,9 +28,7 @@ pub async fn run() -> Result<(), Error> {
     let config_json = fs::read_to_string("dashtool.json")?;
     let config: Arc<Config> = Arc::new(serde_json::from_str(&config_json)?);
 
-    if fs::metadata(".dashtool/refresh.jwt").is_err() {
-        authentication(&config.issuer, &config.client_id).await?;
-    }
+    let refresh_token = get_refresh_token(&config).await?;
 
     let state: Option<State> = fs::read_to_string(".dashtool/state.json")
         .ok()
@@ -51,7 +48,7 @@ pub async fn run() -> Result<(), Error> {
 
     let diff = diff(&repo, &last_id, &current_id)?;
 
-    let branch_dag = create_dag(diff, config.clone(), &branch).await?;
+    let branch_dag = create_dag(diff, config.clone(), &branch, &refresh_token).await?;
 
     let json = serde_json::to_string(&branch_dag)?;
 
@@ -64,6 +61,7 @@ async fn create_dag<'repo>(
     diff: Diff<'repo>,
     config: Arc<Config>,
     branch: &str,
+    refresh_token: &str,
 ) -> Result<Dag, Error> {
     let catalogs: Arc<Mutex<HashMap<String, Arc<dyn Catalog>>>> =
         Arc::new(Mutex::new(HashMap::new()));
@@ -75,7 +73,7 @@ async fn create_dag<'repo>(
     let (tabular_sender, tabular_reciever) = unbounded();
     let (singer_sender, singer_reciever) = unbounded();
 
-    let (access_token, id_token) = authorization(&config.issuer, &config.client_id)
+    let (access_token, id_token) = authorization(&config.issuer, &config.client_id, refresh_token)
         .await
         .map(|(a, i)| (Arc::new(a), Arc::new(i)))?;
 
