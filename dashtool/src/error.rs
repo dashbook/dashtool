@@ -5,7 +5,9 @@ pub enum Error {
     #[error(transparent)]
     Anyhow(#[from] anyhow::Error),
     #[error(transparent)]
-    Serde(#[from] serde_json::Error),
+    SerdeJSON(#[from] serde_json::Error),
+    #[error(transparent)]
+    SerdeYAML(#[from] serde_yaml::Error),
     #[error(transparent)]
     IO(#[from] std::io::Error),
     #[error(transparent)]
@@ -44,6 +46,30 @@ pub enum Error {
     DashbookCatalog(#[from] dashbook_catalog::error::Error),
     #[error(transparent)]
     Datafusion(#[from] datafusion_common::DataFusionError),
+    #[error(transparent)]
+    ArgoDagTask(#[from] argo_workflow::schema::DagTaskBuilderError),
+    #[error(transparent)]
+    ArgoTemplate(#[from] argo_workflow::schema::TemplateBuilderError),
+    #[error(transparent)]
+    ArgoDagTemplate(#[from] argo_workflow::schema::DagTemplateBuilderError),
+    #[error(transparent)]
+    ArgoVolumeMount(#[from] argo_workflow::schema::VolumeMountBuilderError),
+    #[error(transparent)]
+    ArgoVolume(#[from] argo_workflow::schema::VolumeBuilderError),
+    #[error(transparent)]
+    ArgoSecretVolumeSource(#[from] argo_workflow::schema::SecretVolumeSourceBuilderError),
+    #[error(transparent)]
+    ArgoConfigMapVolumeSource(#[from] argo_workflow::schema::ConfigMapVolumeSourceBuilderError),
+    #[error(transparent)]
+    ArgoContainer(#[from] argo_workflow::schema::ContainerBuilderError),
+    #[error(transparent)]
+    ArgoUserContainer(#[from] argo_workflow::schema::UserContainerBuilderError),
+    #[error(transparent)]
+    ArgoCronWorkflowSpec(#[from] argo_workflow::schema::CronWorkflowSpecBuilderError),
+    #[error(transparent)]
+    ArgoCronWorkflow(#[from] argo_workflow::schema::CronWorkflowBuilderError),
+    #[error(transparent)]
+    ArgoWorkflow(#[from] argo_workflow::schema::WorkflowSpecBuilderError),
     #[error("No {0} token revieved.")]
     NoToken(String),
     #[error("{0}")]

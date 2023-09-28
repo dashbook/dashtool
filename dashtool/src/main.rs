@@ -1,7 +1,7 @@
 use std::{fs, str::FromStr};
 
 use anyhow::anyhow;
-use dashtool::{error::Error, init::init, run::run};
+use dashtool::{error::Error, init::init, run::run, workflow::workflow};
 
 use clap::{Parser, Subcommand};
 
@@ -15,6 +15,7 @@ struct Args {
 enum Commands {
     Run,
     Init,
+    Workflow,
 }
 
 #[tokio::main]
@@ -22,6 +23,7 @@ async fn main() -> Result<(), Error> {
     let args = Args::parse();
 
     fs::create_dir_all(".dashtool/dags").ok();
+    fs::create_dir_all("kubernetes").ok();
     #[cfg(not(target_arch = "wasm32"))]
     fs::create_dir_all(
         dirs::config_local_dir()
@@ -33,5 +35,6 @@ async fn main() -> Result<(), Error> {
     match args.commands {
         Commands::Run => run().await,
         Commands::Init => init().await,
+        Commands::Workflow => workflow(),
     }
 }

@@ -19,7 +19,7 @@ use crate::{
     sql::{find_relations, get_schema},
 };
 
-use self::openid::{authorization, get_refresh_token};
+use self::openid::{authorization, fetch_refresh_token, get_refresh_token};
 
 mod openid;
 
@@ -73,9 +73,16 @@ async fn create_dag<'repo>(
     let (tabular_sender, tabular_reciever) = unbounded();
     let (singer_sender, singer_reciever) = unbounded();
 
-    let (access_token, id_token) = authorization(&config.issuer, &config.client_id, refresh_token)
-        .await
-        .map(|(a, i)| (Arc::new(a), Arc::new(i)))?;
+    let (access_token, id_token) =
+        match authorization(&config.issuer, &config.client_id, refresh_token).await {
+            Ok((a, i)) => (Arc::new(a), Arc::new(i)),
+            Err(_) => {
+                let refresh_token = fetch_refresh_token(&config).await?;
+                let (a, i) =
+                    authorization(&config.issuer, &config.client_id, &refresh_token).await?;
+                (Arc::new(a), Arc::new(i))
+            }
+        };
 
     stream::iter(diff.deltas())
         .map(Ok::<_, Error>)

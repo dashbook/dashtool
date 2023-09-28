@@ -86,18 +86,23 @@ pub(crate) async fn get_refresh_token(config: &Config) -> Result<String, Error> 
     ) {
         Ok(token) => token,
         Err(_) => {
-            let refresh_token = authentication(&config.issuer, &config.client_id).await?;
-            fs::write(
-                dirs::config_local_dir()
-                    .and_then(|x| Some(String::from_str(x.to_str()?).ok()?))
-                    .ok_or(Error::Anyhow(anyhow!("Failed to get config directory.")))?
-                    + "/dashtool/refresh.jwt",
-                &refresh_token,
-            )?;
+            let refresh_token = fetch_refresh_token(&config).await?;
             refresh_token
         }
     };
     #[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
     let refresh_token = std::env::var("REFRESH_TOKEN")?;
+    Ok(refresh_token)
+}
+
+pub(crate) async fn fetch_refresh_token(config: &Config) -> Result<String, Error> {
+    let refresh_token = authentication(&config.issuer, &config.client_id).await?;
+    fs::write(
+        dirs::config_local_dir()
+            .and_then(|x| Some(String::from_str(x.to_str()?).ok()?))
+            .ok_or(Error::Anyhow(anyhow!("Failed to get config directory.")))?
+            + "/dashtool/refresh.jwt",
+        &refresh_token,
+    )?;
     Ok(refresh_token)
 }

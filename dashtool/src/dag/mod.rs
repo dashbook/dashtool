@@ -12,9 +12,18 @@ pub enum Node {
     Singer(Singer),
 }
 
+impl Node {
+    pub(crate) fn identifier(&self) -> &str {
+        match self {
+            Node::Singer(singer) => &singer.identifier,
+            Node::Tabular(tab) => &tab.identifier,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Tabular {
-    identifier: String,
+    pub(crate) identifier: String,
 }
 
 impl Tabular {
@@ -27,9 +36,9 @@ impl Tabular {
 
 #[derive(Serialize, Deserialize)]
 pub struct Singer {
-    identifier: String,
-    tap: String,
-    target: SingerConfig,
+    pub(crate) identifier: String,
+    pub(crate) tap: String,
+    pub(crate) target: SingerConfig,
 }
 
 impl Singer {
@@ -44,9 +53,9 @@ impl Singer {
 
 #[derive(Serialize, Deserialize)]
 pub struct Dag {
-    singers: HashMap<String, String>,
-    map: HashMap<String, NodeIndex>,
-    dag: StableDiGraph<Node, ()>,
+    pub(crate) singers: HashMap<String, String>,
+    pub(crate) map: HashMap<String, NodeIndex>,
+    pub(crate) dag: StableDiGraph<Node, ()>,
 }
 
 impl Dag {
@@ -93,7 +102,7 @@ impl Dag {
                 .ok_or(Error::Text("Node not in graph.".to_string()))?,
         };
 
-        self.dag.add_edge(a, b, ());
+        self.dag.add_edge(b, a, ());
         Ok(())
     }
 }
