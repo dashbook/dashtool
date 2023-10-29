@@ -1,7 +1,7 @@
 use std::{fs, str::FromStr};
 
 use anyhow::anyhow;
-use dashtool::{error::Error, init::init, run::run, workflow::workflow};
+use dashtool::{build::build, error::Error, init::init, workflow::workflow};
 
 use clap::{Parser, Subcommand};
 
@@ -13,7 +13,7 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
-    Run,
+    Build,
     Init,
     Workflow,
 }
@@ -33,7 +33,7 @@ async fn main() -> Result<(), Error> {
     )?;
 
     match args.commands {
-        Commands::Run => run().await,
+        Commands::Build => build().await,
         Commands::Init => init().await,
         Commands::Workflow => workflow(),
     }

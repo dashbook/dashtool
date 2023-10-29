@@ -21,7 +21,7 @@ use self::openid::{authorization, fetch_refresh_token, get_refresh_token};
 
 mod openid;
 
-pub async fn run() -> Result<(), Error> {
+pub async fn build() -> Result<(), Error> {
     // Load config files
     let config_json = fs::read_to_string("dashtool.json")?;
     let config: Arc<Config> = Arc::new(serde_json::from_str(&config_json)?);
