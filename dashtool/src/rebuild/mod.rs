@@ -10,7 +10,7 @@ use crate::{
     git::branch,
 };
 
-pub async fn init() -> Result<(), Error> {
+pub async fn rebuild() -> Result<(), Error> {
     let repo = Repository::open(".")?;
     let branch = branch(&repo)?;
     if fs::metadata(".dashtool/dags/".to_string() + &branch + ".json").is_ok() {

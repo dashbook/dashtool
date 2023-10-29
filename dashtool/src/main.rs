@@ -1,7 +1,7 @@
 use std::{fs, str::FromStr};
 
 use anyhow::anyhow;
-use dashtool::{build::build, error::Error, init::init, workflow::workflow};
+use dashtool::{build::build, error::Error, rebuild::rebuild, workflow::workflow};
 
 use clap::{Parser, Subcommand};
 
@@ -14,8 +14,8 @@ struct Args {
 #[derive(Subcommand)]
 enum Commands {
     Build,
-    Init,
     Workflow,
+    Rebuild,
 }
 
 #[tokio::main]
@@ -34,7 +34,7 @@ async fn main() -> Result<(), Error> {
 
     match args.commands {
         Commands::Build => build().await,
-        Commands::Init => init().await,
+        Commands::Rebuild => rebuild().await,
         Commands::Workflow => workflow(),
     }
 }
