@@ -15,6 +15,10 @@ pub enum Error {
     #[error(transparent)]
     ObjectStore(#[from] iceberg_rust::object_store::Error),
     #[error(transparent)]
+    Iceberg(#[from] iceberg_rust::error::Error),
+    #[error(transparent)]
+    DatafusionIceberg(#[from] datafusion_iceberg::error::Error),
+    #[error(transparent)]
     Git(#[from] git2::Error),
     #[error(transparent)]
     OIDCDiscovery(

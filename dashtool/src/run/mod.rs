@@ -2,12 +2,11 @@ use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
 use anyhow::anyhow;
 use dashbook_catalog::{get_catalog, get_role};
+use datafusion_iceberg::sql::get_schema;
 use futures::{channel::mpsc::unbounded, lock::Mutex, stream, SinkExt, StreamExt, TryStreamExt};
 use git2::{BranchType, Delta, Diff, Repository};
 use iceberg_rust::{
-    catalog::{identifier::Identifier, Catalog},
-    model::schema::SchemaV2,
-    view::view_builder::ViewBuilder,
+    catalog::Catalog, spec::schema::Schema, sql::find_relations, view::view_builder::ViewBuilder,
 };
 use target_iceberg_nessie::config::Config as SingerConfig;
 
@@ -16,7 +15,6 @@ use crate::{
     dag::{get_dag, Dag, Node, Singer, Tabular},
     error::Error,
     git::{branch, diff},
-    sql::{find_relations, get_schema},
 };
 
 use self::openid::{authorization, fetch_refresh_token, get_refresh_token};
@@ -151,8 +149,8 @@ async fn create_dag<'repo>(
 
                         let relations = find_relations(&sql)?;
                         let fields = get_schema(&sql, relations.clone(), catalog.clone()).await?;
-                        let schema = SchemaV2 {
-                            schema_id: 0,
+                        let schema = Schema {
+                            schema_id: 1,
                             identifier_field_ids: None,
                             fields,
                         };
@@ -169,15 +167,9 @@ async fn create_dag<'repo>(
                             .trim_start_matches("/")
                             .trim_end_matches(".sql")
                             .replace("/", ".");
-                        ViewBuilder::new_metastore_view(
-                            &sql,
-                            &base_path,
-                            schema,
-                            Identifier::parse(&identifier)?,
-                            catalog,
-                        )?
-                        .commit()
-                        .await?;
+                        let mut builder = ViewBuilder::new(&sql, &identifier, schema, catalog)?;
+                        builder.location(&base_path);
+                        builder.build().await?;
                         tabular_sender.send((identifier, relations)).await?;
                     }
                     (Delta::Added, Some(false)) => {

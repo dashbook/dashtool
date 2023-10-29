@@ -9,10 +9,10 @@ edition = "2021"
 argo-workflow = { path = "../argo-workflow" }
 clap = { version = "4.4", features = ["derive"] }
 dashbook-catalog = { git = "https://github.com/dashbook/dashbook-catalog.git" }
-datafusion_iceberg = { git = "https://github.com/JanKaul/iceberg-rust_archive.git" }
+datafusion_iceberg = { git = "https://github.com/JanKaul/iceberg-rust.git" }
 datafusion-sql = "30.0.0"
 git2 = "0.18"
-iceberg-rust = { git = "https://github.com/JanKaul/iceberg-rust_archive.git" }
+iceberg-rust = { git = "https://github.com/JanKaul/iceberg-rust.git" }
 iceberg-catalog-nessie = { git = "https://github.com/dashbook/iceberg-catalog-nessie-rust.git" }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1,5 +1,6 @@
 use anyhow::anyhow;
 use git2::Repository;
+use iceberg_rust::sql::find_relations;
 use std::{fs, path::Path};
 use target_iceberg_nessie::config::Config as SingerConfig;
 
@@ -7,7 +8,6 @@ use crate::{
     dag::{Dag, Node, Singer, Tabular},
     error::Error,
     git::branch,
-    sql::find_relations,
 };
 
 pub async fn init() -> Result<(), Error> {
