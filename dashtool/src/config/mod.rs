@@ -12,7 +12,7 @@ pub struct Config {
     pub client_id: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(
     rename_all = "camelCase",
     try_from = "crate::config::_serde::State",

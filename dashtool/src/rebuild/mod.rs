@@ -62,13 +62,14 @@ fn add_node(path: &str, dag: &mut Dag) -> Result<(), Error> {
         let tap = fs::read_to_string(&tap_path)?;
         let target_json = fs::read_to_string(path)?;
         let target: SingerConfig = serde_json::from_str(&target_json)?;
-        dag.add_node(Node::Singer(Singer::new(&parent, tap, target)))
+        dag.add_node(Node::Singer(Singer::new(&parent, tap, target, "main")))
     } else if path.ends_with(".sql") {
         dag.add_node(Node::Tabular(Tabular::new(
             &path
                 .trim_end_matches(".sql")
                 .trim_start_matches("/")
                 .replace("/", "."),
+            "main",
         )))
     }
     Ok(())

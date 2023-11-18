@@ -34,7 +34,7 @@ async fn main() -> Result<(), Error> {
 
     match args.commands {
         Commands::Build => build().await,
-        Commands::Rebuild => rebuild().await,
         Commands::Workflow => workflow(),
+        Commands::Rebuild => rebuild().await,
     }
 }

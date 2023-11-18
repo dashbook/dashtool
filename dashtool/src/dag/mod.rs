@@ -13,6 +13,15 @@ pub enum Node {
 }
 
 impl Node {
+    pub(crate) fn branch(&self) -> &str {
+        match self {
+            Node::Tabular(tab) => &tab.branch,
+            Node::Singer(sing) => &sing.branch,
+        }
+    }
+}
+
+impl Node {
     pub(crate) fn identifier(&self) -> &str {
         match self {
             Node::Singer(singer) => &singer.identifier,
@@ -24,12 +33,14 @@ impl Node {
 #[derive(Serialize, Deserialize)]
 pub struct Tabular {
     pub(crate) identifier: String,
+    pub(crate) branch: String,
 }
 
 impl Tabular {
-    pub(crate) fn new(identifier: &str) -> Self {
+    pub(crate) fn new(identifier: &str, branch: &str) -> Self {
         Self {
             identifier: identifier.to_owned(),
+            branch: branch.to_owned(),
         }
     }
 }
@@ -37,14 +48,16 @@ impl Tabular {
 #[derive(Serialize, Deserialize)]
 pub struct Singer {
     pub(crate) identifier: String,
+    pub(crate) branch: String,
     pub(crate) tap: String,
     pub(crate) target: SingerConfig,
 }
 
 impl Singer {
-    pub(crate) fn new(identifier: &str, tap: String, target: SingerConfig) -> Self {
+    pub(crate) fn new(identifier: &str, tap: String, target: SingerConfig, branch: &str) -> Self {
         Self {
             identifier: identifier.to_owned(),
+            branch: branch.to_owned(),
             tap,
             target,
         }

@@ -8,7 +8,7 @@ pub(crate) fn diff<'a>(
     old_id: &Option<Oid>,
     new_id: &Option<Oid>,
 ) -> Result<Diff<'a>, Error> {
-    let previous_commit = old_id
+    let old_tree = old_id
         .as_ref()
         .cloned()
         .map(|x| repo.find_commit(x))
@@ -16,12 +16,15 @@ pub(crate) fn diff<'a>(
         .map(|x| x.tree())
         .transpose()?;
 
-    let current_commit = new_id
+    let new_tree = new_id
         .as_ref()
-        .and_then(|object| repo.find_commit(object.clone()).ok())
-        .and_then(|commit| commit.tree().ok());
+        .cloned()
+        .map(|x| repo.find_commit(x))
+        .transpose()?
+        .map(|x| x.tree())
+        .transpose()?;
 
-    let diff = repo.diff_tree_to_tree(previous_commit.as_ref(), current_commit.as_ref(), None)?;
+    let diff = repo.diff_tree_to_tree(old_tree.as_ref(), new_tree.as_ref(), None)?;
 
     Ok(diff)
 }
