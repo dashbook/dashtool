@@ -9,7 +9,7 @@ use openidconnect::{
     TokenResponse,
 };
 
-use crate::{config::Config, error::Error};
+use crate::{error::Error, plugins::dashbook::Config};
 
 pub async fn authentication(issuer_url: &str, client_id: &str) -> Result<String, Error> {
     let provider_metadata = CoreProviderMetadata::discover_async(

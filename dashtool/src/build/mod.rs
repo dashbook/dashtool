@@ -1,12 +1,11 @@
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
 use anyhow::anyhow;
-use dashbook_catalog::{get_catalog, get_role};
 use datafusion_iceberg::sql::get_schema;
-use futures::{channel::mpsc::unbounded, lock::Mutex, stream, SinkExt, StreamExt, TryStreamExt};
+use futures::{channel::mpsc::unbounded, stream, SinkExt, StreamExt, TryStreamExt};
 use git2::{BranchType, Delta, Diff, Repository};
 use iceberg_rust::{
-    catalog::{identifier::Identifier, tabular::Tabular as IcebergTabular, Catalog},
+    catalog::{identifier::Identifier, tabular::Tabular as IcebergTabular},
     error::Error as IcebergError,
     materialized_view::materialized_view_builder::MaterializedViewBuilder,
     spec::{
@@ -19,23 +18,14 @@ use iceberg_rust::{
 use target_iceberg_nessie::config::Config as SingerConfig;
 
 use crate::{
-    config::{Config, State},
     dag::{Dag, Node, Singer, Tabular},
     error::Error,
     git::{branch, diff},
+    plugins::Plugin,
+    state::State,
 };
 
-use self::openid::{authorization, fetch_refresh_token, get_refresh_token};
-
-mod openid;
-
-pub async fn build() -> Result<(), Error> {
-    // Load config files
-    let config_json = fs::read_to_string("dashtool.json")?;
-    let config: Arc<Config> = Arc::new(serde_json::from_str(&config_json)?);
-
-    let refresh_token = get_refresh_token(&config).await?;
-
+pub async fn build(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
     let state: State = fs::read_to_string(".dashtool/state.json")
         .ok()
         .and_then(|x| serde_json::from_str(&x).ok())
@@ -86,10 +76,9 @@ pub async fn build() -> Result<(), Error> {
     build_dag(
         &mut dag,
         main_diff,
-        config.clone(),
+        plugin.clone(),
         "main",
         merged_branch.as_deref(),
-        &refresh_token,
     )
     .await?;
 
@@ -99,15 +88,7 @@ pub async fn build() -> Result<(), Error> {
 
     let diff = diff(&repo, &last_id, &current_id)?;
 
-    build_dag(
-        &mut dag,
-        diff,
-        config.clone(),
-        &current_branch,
-        None,
-        &refresh_token,
-    )
-    .await?;
+    build_dag(&mut dag, diff, plugin.clone(), &current_branch, None).await?;
 
     let json = serde_json::to_string(&dag)?;
 
@@ -123,39 +104,17 @@ pub async fn build() -> Result<(), Error> {
 async fn build_dag<'repo>(
     dag: &mut Dag,
     diff: Diff<'repo>,
-    config: Arc<Config>,
+    plugin: Arc<dyn Plugin>,
     branch: &str,
     merged_branch: Option<&str>,
-    refresh_token: &str,
 ) -> Result<(), Error> {
-    let catalogs: Arc<Mutex<HashMap<String, Arc<dyn Catalog>>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-
-    let catalog_name = config.catalog.split("/").last().ok_or(Error::Text(
-        "Catalog url doesn't contain catalog name.".to_string(),
-    ))?;
-
     let (tabular_sender, tabular_reciever) = unbounded();
     let (singer_sender, singer_reciever) = unbounded();
-
-    let (access_token, id_token) =
-        match authorization(&config.issuer, &config.client_id, refresh_token).await {
-            Ok((a, i)) => (Arc::new(a), Arc::new(i)),
-            Err(_) => {
-                let refresh_token = fetch_refresh_token(&config).await?;
-                let (a, i) =
-                    authorization(&config.issuer, &config.client_id, &refresh_token).await?;
-                (Arc::new(a), Arc::new(i))
-            }
-        };
 
     stream::iter(diff.deltas())
         .map(Ok::<_, Error>)
         .try_for_each(|delta| {
-            let catalogs = catalogs.clone();
-            let config = config.clone();
-            let access_token = access_token.clone();
-            let id_token = id_token.clone();
+            let plugin = plugin.clone();
             let mut tabular_sender = tabular_sender.clone();
             let mut singer_sender = singer_sender.clone();
             async move {
@@ -185,34 +144,7 @@ async fn build_dag<'repo>(
                             .unwrap();
                         let identifier = table_namespace.to_string() + "." + table_name;
 
-                        let role = get_role(
-                            &access_token,
-                            &catalog_name,
-                            table_namespace,
-                            table_name,
-                            "write",
-                        )
-                        .await?;
-
-                        let catalog = {
-                            let mut catalogs = catalogs.lock().await;
-                            match catalogs.get(&role) {
-                                Some(catalog) => catalog.clone(),
-                                None => {
-                                    let catalog = get_catalog(
-                                        &config.catalog,
-                                        &access_token,
-                                        &id_token,
-                                        &table_namespace,
-                                        &table_name,
-                                        &role,
-                                    )
-                                    .await?;
-                                    catalogs.insert(role, catalog.clone());
-                                    catalog
-                                }
-                            }
-                        };
+                        let catalog = plugin.catalog(table_namespace, table_name).await?;
 
                         let sql = fs::read_to_string(path)?;
                         let relations = find_relations(&sql)?;
@@ -268,20 +200,18 @@ async fn build_dag<'repo>(
                                     identifier_field_ids: None,
                                     fields,
                                 };
-                                let base_path = config.bucket.to_string()
-                                    + "/"
-                                    + path
-                                        .to_str()
-                                        .ok_or(Error::Text("No new file in delta".to_string()))?
-                                        .trim_start_matches("/")
-                                        .trim_end_matches(".sql");
+                                let base_path = path
+                                    .to_str()
+                                    .ok_or(Error::Text("No new file in delta".to_string()))?
+                                    .trim_start_matches("/")
+                                    .trim_end_matches(".sql");
                                 let mut builder = MaterializedViewBuilder::new(
                                     &sql,
                                     &identifier,
                                     schema,
                                     catalog,
                                 )?;
-                                builder.location(&base_path);
+                                builder.location(base_path);
                                 builder.build().await?;
                             }
                             _ => (),

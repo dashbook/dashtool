@@ -1,7 +1,12 @@
-use std::{fs, str::FromStr};
+use std::{fs, str::FromStr, sync::Arc};
 
 use anyhow::anyhow;
-use dashtool::{build::build, error::Error, rebuild::rebuild, workflow::workflow};
+use dashtool::{
+    build::build,
+    error::Error,
+    plugins::{dashbook::DashbookPlugin, Plugin},
+    workflow::workflow,
+};
 
 use clap::{Parser, Subcommand};
 
@@ -9,13 +14,16 @@ use clap::{Parser, Subcommand};
 struct Args {
     #[command(subcommand)]
     commands: Commands,
+
+    /// Plugin to execute. Available options are [dashbook, sql]. Defaults to dashbook.
+    #[arg(short, long)]
+    plugin: Option<String>,
 }
 
 #[derive(Subcommand)]
 enum Commands {
     Build,
     Workflow,
-    Rebuild,
 }
 
 #[tokio::main]
@@ -32,9 +40,13 @@ async fn main() -> Result<(), Error> {
             + "/dashtool",
     )?;
 
+    let plugin: Arc<dyn Plugin> = match args.plugin.as_deref() {
+        Some("dashbook") | None => Ok(Arc::new(DashbookPlugin::new("dashtool.json").await?)),
+        _ => Err(Error::Text("Unknown plugin".to_string())),
+    }?;
+
     match args.commands {
-        Commands::Build => build().await,
-        Commands::Workflow => workflow(),
-        Commands::Rebuild => rebuild().await,
+        Commands::Build => build(plugin).await,
+        Commands::Workflow => workflow(plugin),
     }
 }

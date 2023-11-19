@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fs, sync::Arc};
 
 use argo_workflow::schema::{
     CronWorkflowBuilder, CronWorkflowSpecBuilder, DagTaskBuilder, DagTemplateBuilder,
@@ -11,6 +11,7 @@ use crate::{
     dag::{get_dag, Node},
     error::Error,
     git::branch,
+    plugins::Plugin,
 };
 
 use self::template::{iceberg_template, singer_template};
@@ -19,14 +20,14 @@ mod template;
 
 static API_VERSION: &str = "argoproj.io/v1alpha1";
 
-pub fn workflow() -> Result<(), Error> {
+pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
     let repo = Repository::open(".")?;
     let branch = branch(&repo)?;
 
     let dag = get_dag(&branch)?;
 
     let mut templates: HashMap<String, IoArgoprojWorkflowV1alpha1Template> =
-        HashMap::from_iter(vec![("refresh".to_string(), iceberg_template()?)]);
+        HashMap::from_iter(vec![("refresh".to_string(), iceberg_template(&*plugin)?)]);
 
     let tasks = dag
         .dag
@@ -37,7 +38,7 @@ pub fn workflow() -> Result<(), Error> {
                 Node::Singer(node) => {
                     templates
                         .entry(node.target.image.clone())
-                        .or_insert_with(|| singer_template(&node).unwrap());
+                        .or_insert_with(|| singer_template(&node, &*plugin).unwrap());
                     DagTaskBuilder::default()
                         .name(node.identifier.clone())
                         .template(Some(node.target.image.clone()))

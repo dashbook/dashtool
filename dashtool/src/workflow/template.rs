@@ -1,12 +1,15 @@
-use crate::{dag::Singer, error::Error};
+use crate::{dag::Singer, error::Error, plugins::Plugin};
 
 use argo_workflow::schema::{
     ConfigMapVolumeSourceBuilder, ContainerBuilder, IoArgoprojWorkflowV1alpha1Template,
-    IoK8sApiCoreV1EmptyDirVolumeSource, SecretVolumeSourceBuilder, TemplateBuilder,
-    UserContainerBuilder, VolumeBuilder, VolumeMountBuilder,
+    IoK8sApiCoreV1EmptyDirVolumeSource, TemplateBuilder, UserContainerBuilder, VolumeBuilder,
+    VolumeMountBuilder,
 };
 
-pub(crate) fn singer_template(node: &Singer) -> Result<IoArgoprojWorkflowV1alpha1Template, Error> {
+pub(crate) fn singer_template(
+    node: &Singer,
+    plugin: &dyn Plugin,
+) -> Result<IoArgoprojWorkflowV1alpha1Template, Error> {
     let template = TemplateBuilder::default()
         .name(Some(node.target.image.clone()))
         .container(Some(
@@ -15,38 +18,14 @@ pub(crate) fn singer_template(node: &Singer) -> Result<IoArgoprojWorkflowV1alpha
                 .volume_mounts(vec![VolumeMountBuilder::default()
                     .name("config".to_string())
                     .mount_path("/tmp/config".to_string())
-                    .build()
-                    ?])
-                .build()
-                ?,
-        ))
-        .init_containers(vec![
-            UserContainerBuilder::default()
-                .name("authorization".to_string())
-                .image(Some(
-                    "ghcr.io/dashbook/dashtool-authorization".to_string(),
-                ))
-                .volume_mounts(vec![
-                    VolumeMountBuilder::default()
-                        .name("authorization".to_string())
-                        .mount_path("/tmp/authorization".to_string())
-                        .build()?,
-                    VolumeMountBuilder::default()
-                        .name("dashtool-authentication".to_string())
-                        .mount_path("/tmp/authentication".to_string())
-                        .build()?,
-                ])
+                    .build()?])
                 .build()?,
+        ))
+        .init_containers(plugin.init_containters()?.unwrap_or(vec![
             UserContainerBuilder::default()
                 .name("envsubst".to_string())
                 .image(Some("dibi/envsubst".to_string()))
-                .command(vec!["/bin/sh".to_string()])
-                .args(vec!["-c".to_string(),"export ACCESS_TOKEN=$(cat /tmp/authorization/access.jwt) && export ID_TOKEN=$(cat /tmp/authorization/id.jwt) && /envsubst-file.sh".to_string()])
                 .volume_mounts(vec![
-                    VolumeMountBuilder::default()
-                        .name("authorization".to_string())
-                        .mount_path("/tmp/authorization".to_string())
-                        .build()?,
                     VolumeMountBuilder::default()
                         .name("config_template".to_string())
                         .mount_path("/workdir".to_string())
@@ -57,44 +36,25 @@ pub(crate) fn singer_template(node: &Singer) -> Result<IoArgoprojWorkflowV1alpha
                         .build()?,
                 ])
                 .build()?,
-        ])
-        .volumes(vec![
-            VolumeBuilder::default()
-                .name("authorization".to_string())
-                .empty_dir(Some(
-                    IoK8sApiCoreV1EmptyDirVolumeSource::default(),
-                ))
-                .build()?,
-            VolumeBuilder::default()
-                .name("authentication".to_string())
-                .secret(Some(
-                    SecretVolumeSourceBuilder::default()
-                        .secret_name(Some(
-                            "dashtool-authentication".to_string(),
-                        ))
-                        .build()?,
-                ))
-                .build()?,
+        ]))
+        .volumes(plugin.volumes()?.unwrap_or(vec![
             VolumeBuilder::default()
                 .name("config".to_string())
-                .empty_dir(Some(
-                    IoK8sApiCoreV1EmptyDirVolumeSource::default(),
-                ))
+                .empty_dir(Some(IoK8sApiCoreV1EmptyDirVolumeSource::default()))
                 .build()?,
             VolumeBuilder::default()
                 .name("config_template".to_string())
-                .config_map(Some(
-                    ConfigMapVolumeSourceBuilder::default()
-                        .build()?,
-                ))
+                .config_map(Some(ConfigMapVolumeSourceBuilder::default().build()?))
                 .build()?,
-        ])
+        ]))
         .build()
         .unwrap();
     Ok(template)
 }
 
-pub(crate) fn iceberg_template() -> Result<IoArgoprojWorkflowV1alpha1Template, Error> {
+pub(crate) fn iceberg_template(
+    plugin: &dyn Plugin,
+) -> Result<IoArgoprojWorkflowV1alpha1Template, Error> {
     let template = TemplateBuilder::default()
         .name(Some("iceberg".to_string()))
         .container(Some(
@@ -103,38 +63,14 @@ pub(crate) fn iceberg_template() -> Result<IoArgoprojWorkflowV1alpha1Template, E
                 .volume_mounts(vec![VolumeMountBuilder::default()
                     .name("config".to_string())
                     .mount_path("/tmp/config".to_string())
-                    .build()
-                    ?])
-                .build()
-                ?,
-        ))
-        .init_containers(vec![
-            UserContainerBuilder::default()
-                .name("authorization".to_string())
-                .image(Some(
-                    "ghcr.io/dashbook/dashtool-authorization".to_string(),
-                ))
-                .volume_mounts(vec![
-                    VolumeMountBuilder::default()
-                        .name("authorization".to_string())
-                        .mount_path("/tmp/authorization".to_string())
-                        .build()?,
-                    VolumeMountBuilder::default()
-                        .name("dashtool-authentication".to_string())
-                        .mount_path("/tmp/authentication".to_string())
-                        .build()?,
-                ])
+                    .build()?])
                 .build()?,
+        ))
+        .init_containers(plugin.init_containters()?.unwrap_or(vec![
             UserContainerBuilder::default()
                 .name("envsubst".to_string())
                 .image(Some("dibi/envsubst".to_string()))
-                .command(vec!["/bin/sh".to_string()])
-                .args(vec!["-c".to_string(),"export ACCESS_TOKEN=$(cat /tmp/authorization/access.jwt) && export ID_TOKEN=$(cat /tmp/authorization/id.jwt) && /envsubst-file.sh".to_string()])
                 .volume_mounts(vec![
-                    VolumeMountBuilder::default()
-                        .name("authorization".to_string())
-                        .mount_path("/tmp/authorization".to_string())
-                        .build()?,
                     VolumeMountBuilder::default()
                         .name("config_template".to_string())
                         .mount_path("/workdir".to_string())
@@ -145,38 +81,17 @@ pub(crate) fn iceberg_template() -> Result<IoArgoprojWorkflowV1alpha1Template, E
                         .build()?,
                 ])
                 .build()?,
-        ])
-        .volumes(vec![
-            VolumeBuilder::default()
-                .name("authorization".to_string())
-                .empty_dir(Some(
-                    IoK8sApiCoreV1EmptyDirVolumeSource::default(),
-                ))
-                .build()?,
-            VolumeBuilder::default()
-                .name("authentication".to_string())
-                .secret(Some(
-                    SecretVolumeSourceBuilder::default()
-                        .secret_name(Some(
-                            "dashtool-authentication".to_string(),
-                        ))
-                        .build()?,
-                ))
-                .build()?,
+        ]))
+        .volumes(plugin.volumes()?.unwrap_or(vec![
             VolumeBuilder::default()
                 .name("config".to_string())
-                .empty_dir(Some(
-                    IoK8sApiCoreV1EmptyDirVolumeSource::default(),
-                ))
+                .empty_dir(Some(IoK8sApiCoreV1EmptyDirVolumeSource::default()))
                 .build()?,
             VolumeBuilder::default()
                 .name("config_template".to_string())
-                .config_map(Some(
-                    ConfigMapVolumeSourceBuilder::default()
-                        .build()?,
-                ))
+                .config_map(Some(ConfigMapVolumeSourceBuilder::default().build()?))
                 .build()?,
-        ])
+        ]))
         .build()
         .unwrap();
     Ok(template)

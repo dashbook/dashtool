@@ -3,20 +3,11 @@ use std::collections::HashMap;
 use git2::Oid;
 use serde::{self, Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Config {
-    pub catalog: String,
-    pub bucket: String,
-    pub issuer: String,
-    pub client_id: String,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(
     rename_all = "camelCase",
-    try_from = "crate::config::_serde::State",
-    into = "crate::config::_serde::State"
+    try_from = "crate::state::_serde::State",
+    into = "crate::state::_serde::State"
 )]
 pub struct State {
     pub commits: HashMap<String, Oid>,

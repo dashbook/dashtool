@@ -13,15 +13,6 @@ pub enum Node {
 }
 
 impl Node {
-    pub(crate) fn branch(&self) -> &str {
-        match self {
-            Node::Tabular(tab) => &tab.branch,
-            Node::Singer(sing) => &sing.branch,
-        }
-    }
-}
-
-impl Node {
     pub(crate) fn identifier(&self) -> &str {
         match self {
             Node::Singer(singer) => &singer.identifier,

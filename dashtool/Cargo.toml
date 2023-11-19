@@ -29,6 +29,7 @@ petgraph = { version = "0.6", features = ["serde-1"] }
 arrow-schema = "45.0.0"
 target-iceberg-nessie = { git = "https://github.com/dashbook/target-iceberg-nessie.git" }
 serde_yaml = "0.9.25"
+async-trait = "0.1"
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
