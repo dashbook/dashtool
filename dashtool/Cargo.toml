@@ -10,14 +10,14 @@ argo-workflow = { path = "../argo-workflow" }
 clap = { version = "4.4", features = ["derive"] }
 dashbook-catalog = { git = "https://github.com/dashbook/dashbook-catalog.git" }
 datafusion_iceberg = { git = "https://github.com/JanKaul/iceberg-rust.git" }
-datafusion-sql = "30.0.0"
+datafusion-sql = "33.0.0"
 git2 = "0.18"
 iceberg-rust = { git = "https://github.com/JanKaul/iceberg-rust.git" }
 iceberg-rust-spec = { git = "https://github.com/JanKaul/iceberg-rust.git" }
 iceberg-catalog-nessie = { git = "https://github.com/dashbook/iceberg-catalog-nessie-rust.git" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sqlparser = { version = "0.36", features = ["visitor"] }
+sqlparser = { version = "0.39", features = ["visitor"] }
 object_store = "0.7"
 openidconnect = "3.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
@@ -26,9 +26,9 @@ thiserror = "1"
 reqwest = "0.11"
 url = "2.4"
 anyhow = "1"
-datafusion-common = "30.0.0"
+datafusion-common = "33.0.0"
 petgraph = { version = "0.6", features = ["serde-1"] }
-arrow-schema = "45.0.0"
+arrow-schema = "48.0.1"
 target-iceberg-nessie = { git = "https://github.com/dashbook/target-iceberg-nessie.git" }
 serde_yaml = "0.9.25"
 async-trait = "0.1"
