@@ -13,9 +13,11 @@ pub enum Error {
     #[error(transparent)]
     FuturesChannel(#[from] futures::channel::mpsc::SendError),
     #[error(transparent)]
-    ObjectStore(#[from] iceberg_rust::object_store::Error),
+    ObjectStore(#[from] object_store::Error),
     #[error(transparent)]
     Iceberg(#[from] iceberg_rust::error::Error),
+    #[error(transparent)]
+    IcebergSpec(#[from] iceberg_rust_spec::error::Error),
     #[error(transparent)]
     DatafusionIceberg(#[from] datafusion_iceberg::error::Error),
     #[error(transparent)]
