@@ -317,6 +317,7 @@ mod tests {
             .expect("Failed to build dag");
 
         assert_eq!(dag.singers.len(), 1);
+        assert_eq!(dag.map.len(), 1);
 
         let orders = dag
             .singers

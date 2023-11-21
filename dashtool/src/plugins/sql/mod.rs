@@ -64,6 +64,10 @@ impl SqlPlugin {
 
         Ok(SqlPlugin { catalog })
     }
+
+    pub fn new_with_catalog(catalog: Arc<dyn Catalog>) -> Result<Self, Error> {
+        Ok(SqlPlugin { catalog })
+    }
 }
 
 #[async_trait]
