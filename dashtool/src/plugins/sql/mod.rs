@@ -4,7 +4,7 @@ use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCor
 use async_trait::async_trait;
 use iceberg_catalog_sql::SqlCatalog;
 use iceberg_rust::catalog::Catalog;
-use object_store::aws::AmazonS3Builder;
+use object_store::{aws::AmazonS3Builder, memory::InMemory, ObjectStore};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
@@ -17,7 +17,7 @@ pub struct Config {
     pub name: String,
     pub url: String,
     pub region: String,
-    pub bucket: String,
+    pub bucket: Option<String>,
     pub secret_name: String,
     pub access_key_id: Option<String>,
     pub secret_access_key: Option<String>,
@@ -32,24 +32,33 @@ impl SqlPlugin {
         let config_json = fs::read_to_string(path)?;
         let config: Config = serde_json::from_str(&config_json)?;
 
-        let object_store = Arc::new(
-            AmazonS3Builder::new()
-                .with_region(&config.region)
-                .with_bucket_name(&config.bucket)
-                .with_access_key_id(
-                    config
-                        .access_key_id
-                        .as_ref()
-                        .ok_or(Error::NoToken("ACCESS_KEY_ID".to_string()))?,
-                )
-                .with_secret_access_key(
-                    config
-                        .secret_access_key
-                        .as_ref()
-                        .ok_or(Error::NoToken("SECRET_ACCESS_KEY".to_string()))?,
-                )
-                .build()?,
-        );
+        let object_store = if let Some(bucket) = config.bucket {
+            Ok(Arc::new(
+                AmazonS3Builder::new()
+                    .with_region(&config.region)
+                    .with_bucket_name(&bucket)
+                    .with_access_key_id(
+                        config
+                            .access_key_id
+                            .as_ref()
+                            .ok_or(Error::NoToken("ACCESS_KEY_ID".to_string()))?,
+                    )
+                    .with_secret_access_key(
+                        config
+                            .secret_access_key
+                            .as_ref()
+                            .ok_or(Error::NoToken("SECRET_ACCESS_KEY".to_string()))?,
+                    )
+                    .build()?,
+            ) as Arc<dyn ObjectStore>)
+        } else {
+            // Enables InMemory ObjectStore for tests
+            if cfg!(test) {
+                Ok(Arc::new(InMemory::new()) as Arc<dyn ObjectStore>)
+            } else {
+                Err(Error::NoToken("BUCKET".to_string()))
+            }
+        }?;
 
         let catalog = Arc::new(SqlCatalog::new(&config.url, &config.name, object_store).await?);
 

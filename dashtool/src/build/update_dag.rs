@@ -14,7 +14,6 @@ use crate::{
 pub(super) fn update_dag<'repo>(diff: Diff<'repo>, dag: Option<Dag>) -> Result<Dag, Error> {
     let mut dag = dag.unwrap_or(Dag::new());
     for delta in diff.deltas() {
-        dbg!(&delta.new_file());
         let path = delta
             .new_file()
             .path()
@@ -154,6 +153,8 @@ mod tests {
             .expect("Failed to create diff for repo");
 
         let dag = update_dag(diff, None).expect("Failed to create dag");
+
+        assert_eq!(dag.singers.len(), 1);
 
         let orders = dag
             .singers
