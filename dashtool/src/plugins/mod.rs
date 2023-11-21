@@ -7,6 +7,7 @@ use iceberg_rust::catalog::Catalog;
 use crate::error::Error;
 
 pub mod dashbook;
+pub mod sql;
 
 #[async_trait]
 pub trait Plugin {

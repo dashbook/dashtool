@@ -19,6 +19,7 @@ use self::template::{iceberg_template, singer_template};
 mod template;
 
 static API_VERSION: &str = "argoproj.io/v1alpha1";
+pub static WORKFLOW_DIR: &str = "argo";
 
 pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
     let repo = Repository::open(".")?;
@@ -84,7 +85,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
 
     let yaml = serde_yaml::to_string(&workflow)?;
 
-    fs::write("kubernetes/workflow.yaml", yaml)?;
+    fs::write(&(WORKFLOW_DIR.to_string() + "/workflow.yaml"), yaml)?;
 
     Ok(())
 }

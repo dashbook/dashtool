@@ -4,8 +4,8 @@ use anyhow::anyhow;
 use dashtool::{
     build::build,
     error::Error,
-    plugins::{dashbook::DashbookPlugin, Plugin},
-    workflow::workflow,
+    plugins::{dashbook::DashbookPlugin, sql::SqlPlugin, Plugin},
+    workflow::{workflow, WORKFLOW_DIR},
 };
 
 use clap::{Parser, Subcommand};
@@ -31,7 +31,7 @@ async fn main() -> Result<(), Error> {
     let args = Args::parse();
 
     fs::create_dir_all(".dashtool/dags").ok();
-    fs::create_dir_all("kubernetes").ok();
+    fs::create_dir_all(WORKFLOW_DIR).ok();
     #[cfg(not(target_arch = "wasm32"))]
     fs::create_dir_all(
         dirs::config_local_dir()
@@ -41,7 +41,10 @@ async fn main() -> Result<(), Error> {
     )?;
 
     let plugin: Arc<dyn Plugin> = match args.plugin.as_deref() {
-        Some("dashbook") | None => Ok(Arc::new(DashbookPlugin::new("dashtool.json").await?)),
+        Some("dashbook") | None => {
+            Ok(Arc::new(DashbookPlugin::new("dashtool.json").await?) as Arc<dyn Plugin>)
+        }
+        Some("sql") => Ok(Arc::new(SqlPlugin::new("dashtool.json").await?) as Arc<dyn Plugin>),
         _ => Err(Error::Text("Unknown plugin".to_string())),
     }?;
 
