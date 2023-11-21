@@ -6,7 +6,7 @@ use target_iceberg_nessie::config::Config as SingerConfig;
 
 use crate::error::Error;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub enum Node {
     Tabular(Tabular),
     Singer(Singer),
@@ -21,7 +21,7 @@ impl Node {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Tabular {
     pub(crate) identifier: String,
     pub(crate) branch: String,
@@ -36,7 +36,7 @@ impl Tabular {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Singer {
     pub(crate) identifier: String,
     pub(crate) branch: String,
@@ -55,7 +55,7 @@ impl Singer {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Dag {
     pub(crate) singers: HashMap<String, String>,
     pub(crate) map: HashMap<String, NodeIndex>,
