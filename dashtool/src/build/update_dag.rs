@@ -293,8 +293,6 @@ mod tests {
 
         let dag = update_dag(diff, None).expect("Failed to create dag");
 
-        dbg!(&dag);
-
         assert_eq!(dag.singers.len(), 1);
         assert_eq!(dag.map.len(), 2);
 

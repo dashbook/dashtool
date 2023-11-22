@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, path::Path, sync::Arc};
+use std::{collections::HashMap, ffi::OsStr, fs, path::Path, sync::Arc};
 
 use anyhow::anyhow;
 use datafusion_iceberg::sql::get_schema;
@@ -45,7 +45,7 @@ pub(super) async fn build_dag<'repo>(
                     .new_file()
                     .path()
                     .ok_or(Error::Text("No new file in delta".to_string()))?;
-                let is_tabular = if path.ends_with(".sql") {
+                let is_tabular = if path.extension() == Some(&OsStr::new("sql")) {
                     Some(true)
                 } else if path.ends_with("target.json") {
                     Some(false)
@@ -201,6 +201,14 @@ mod tests {
     };
 
     use git2::DiffOptions;
+    use iceberg_catalog_sql::SqlCatalog;
+    use iceberg_rust::table::table_builder::TableBuilder;
+    use iceberg_rust_spec::spec::{
+        partition::{PartitionField, PartitionSpecBuilder, Transform},
+        schema::Schema,
+        types::{PrimitiveType, StructField, StructTypeBuilder, Type},
+    };
+    use object_store::memory::InMemory;
 
     use crate::{
         build::{build_dag::build_dag, update_dag::update_dag},
@@ -340,5 +348,207 @@ mod tests {
             singer.target.image,
             "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg"
         );
+    }
+
+    #[tokio::test]
+    async fn add_tabular() {
+        let (temp_dir, repo) = repo_init();
+
+        env::set_current_dir(temp_dir.path()).expect("Failed to set current work dir");
+        std::env::current_dir().expect("Failed to sync workdir");
+
+        let bronze_path = temp_dir.path().join("bronze");
+        fs::create_dir(&bronze_path).expect("Failed to create directory");
+
+        let bronze_inventory_path = bronze_path.join("inventory");
+        fs::create_dir(&bronze_inventory_path).expect("Failed to create directory");
+
+        let tap_path = bronze_inventory_path.join(Path::new("tap.json"));
+        File::create(&tap_path)
+            .expect("Failed to create file")
+            .write_all(
+                r#"
+                {
+                   "host": "172.17.0.2",
+	               "port": 5432,
+	               "user": "postgres",
+	               "password": "$POSTGRES_PASSWORD",
+	               "dbname": "postgres",
+	               "filter_schemas": "inventory",
+	               "default_replication_method": "LOG_BASED"
+                }
+                "#
+                .as_bytes(),
+            )
+            .expect("Failed to write to file");
+
+        let target_path = bronze_inventory_path.join(Path::new("target.json"));
+        File::create(&target_path)
+            .expect("Failed to create file")
+            .write_all(
+                r#"
+                {
+                    "image": "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg",
+                    "streams": {"inventory_orders": "bronze.inventory.orders"},
+                    "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
+                    "bucket": "s3://example-postgres/",
+                    "access_token": "$ACCESS_TOKEN",
+                    "id_token": "$ID_TOKEN"
+                }
+                "#
+                .as_bytes(),
+            )
+            .expect("Failed to write to file");
+
+        let mut opts = DiffOptions::new();
+        opts.include_untracked(true);
+
+        let mut index = repo.index().expect("Failed to create index");
+        index
+            .add_path(
+                &tap_path
+                    .as_path()
+                    .strip_prefix(temp_dir.path())
+                    .expect("Failed to get relative path of file"),
+            )
+            .expect("Failed to add path to index");
+        index
+            .add_path(
+                &target_path
+                    .as_path()
+                    .strip_prefix(temp_dir.path())
+                    .expect("Failed to get relative path of file"),
+            )
+            .expect("Failed to add path to index");
+
+        let silver_path = temp_dir.path().join("silver");
+        fs::create_dir(&silver_path).expect("Failed to create directory");
+
+        let silver_inventory_path = silver_path.join("inventory");
+        fs::create_dir(&silver_inventory_path).expect("Failed to create directory");
+
+        let tabular_path = silver_inventory_path.join(Path::new("factOrder.sql"));
+        File::create(&tabular_path)
+            .expect("Failed to create file")
+            .write_all(
+                r#"
+                select product_id, sum(amount) from bronze.inventory.orders group by product_id;
+                "#
+                .as_bytes(),
+            )
+            .expect("Failed to write to file");
+
+        index
+            .add_path(
+                &tabular_path
+                    .as_path()
+                    .strip_prefix(temp_dir.path())
+                    .expect("Failed to get relative path of file"),
+            )
+            .expect("Failed to add path to index");
+
+        let last_main_diff = repo
+            .diff_tree_to_tree(None, None, None)
+            .expect("Failed to create diff for repo");
+
+        let main_diff = repo
+            .diff_tree_to_index(None, Some(&index), Some(&mut opts))
+            .expect("Failed to create diff for repo");
+
+        let mut dag = update_dag(last_main_diff, None).expect("Failed to create dag");
+
+        let object_store = Arc::new(InMemory::new());
+
+        let catalog = Arc::new(
+            SqlCatalog::new("sqlite://", "iceberg", object_store)
+                .await
+                .expect("Failed to create catalog"),
+        );
+
+        let schema = Schema {
+            schema_id: 1,
+            identifier_field_ids: None,
+            fields: StructTypeBuilder::default()
+                .with_struct_field(StructField {
+                    id: 1,
+                    name: "id".to_string(),
+                    required: true,
+                    field_type: Type::Primitive(PrimitiveType::Long),
+                    doc: None,
+                })
+                .with_struct_field(StructField {
+                    id: 2,
+                    name: "customer_id".to_string(),
+                    required: true,
+                    field_type: Type::Primitive(PrimitiveType::Long),
+                    doc: None,
+                })
+                .with_struct_field(StructField {
+                    id: 3,
+                    name: "product_id".to_string(),
+                    required: true,
+                    field_type: Type::Primitive(PrimitiveType::Long),
+                    doc: None,
+                })
+                .with_struct_field(StructField {
+                    id: 4,
+                    name: "date".to_string(),
+                    required: true,
+                    field_type: Type::Primitive(PrimitiveType::Date),
+                    doc: None,
+                })
+                .with_struct_field(StructField {
+                    id: 5,
+                    name: "amount".to_string(),
+                    required: true,
+                    field_type: Type::Primitive(PrimitiveType::Int),
+                    doc: None,
+                })
+                .build()
+                .unwrap(),
+        };
+        let partition_spec = PartitionSpecBuilder::default()
+            .spec_id(1)
+            .with_partition_field(PartitionField {
+                source_id: 4,
+                field_id: 1000,
+                name: "day".to_string(),
+                transform: Transform::Day,
+            })
+            .build()
+            .expect("Failed to create partition spec");
+
+        let mut builder = TableBuilder::new("bronze.inventory.orders", catalog.clone())
+            .expect("Failed to create table builder");
+        builder
+            .location("/bronze/inventory/orders")
+            .with_schema((1, schema))
+            .current_schema_id(1)
+            .with_partition_spec((1, partition_spec))
+            .default_spec_id(1);
+
+        builder.build().await.expect("Failed to create table.");
+
+        let plugin =
+            Arc::new(SqlPlugin::new_with_catalog(catalog).expect("Failed to create plugin"));
+
+        build_dag(&mut dag, main_diff, plugin, "main", None)
+            .await
+            .expect("Failed to build dag");
+
+        assert_eq!(dag.singers.len(), 1);
+        assert_eq!(dag.map.len(), 2);
+
+        let tabular = &dag.dag[dag
+            .map
+            .get("silver.inventory.factOrder")
+            .expect("Failed to get graph index")
+            .clone()];
+
+        let Node::Tabular(tabular) = tabular else {
+            panic!("Node is not a singer")
+        };
+
+        assert_eq!(tabular.identifier, "silver.inventory.factOrder")
     }
 }

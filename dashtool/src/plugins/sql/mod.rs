@@ -64,8 +64,11 @@ impl SqlPlugin {
 
         Ok(SqlPlugin { catalog })
     }
+}
 
-    pub fn new_with_catalog(catalog: Arc<dyn Catalog>) -> Result<Self, Error> {
+#[cfg(test)]
+impl SqlPlugin {
+    pub(crate) fn new_with_catalog(catalog: Arc<dyn Catalog>) -> Result<Self, Error> {
         Ok(SqlPlugin { catalog })
     }
 }
