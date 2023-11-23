@@ -6,6 +6,8 @@ use target_iceberg_nessie::config::Config as SingerConfig;
 
 use crate::error::Error;
 
+pub(crate) mod identifier;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Node {
     Tabular(Tabular),

@@ -24,6 +24,7 @@ mod openid;
 pub struct Config {
     pub catalog: String,
     pub bucket: String,
+    pub includes: Vec<[String; 2]>,
     pub issuer: String,
     pub client_id: String,
 }
@@ -32,7 +33,7 @@ pub struct DashbookPlugin {
     config: Config,
     access_token: String,
     id_token: String,
-    catalogs: Arc<Mutex<HashMap<String, Arc<dyn Catalog>>>>,
+    catalogs: Arc<Mutex<HashMap<(String, String), Arc<dyn Catalog>>>>,
 }
 
 impl DashbookPlugin {
@@ -45,7 +46,7 @@ impl DashbookPlugin {
         let (access_token, id_token) =
             authorization(&config.issuer, &config.client_id, &refresh_token).await?;
 
-        let catalogs: Arc<Mutex<HashMap<String, Arc<dyn Catalog>>>> =
+        let catalogs: Arc<Mutex<HashMap<(String, String), Arc<dyn Catalog>>>> =
             Arc::new(Mutex::new(HashMap::new()));
 
         Ok(DashbookPlugin {
@@ -61,13 +62,11 @@ impl DashbookPlugin {
 impl Plugin for DashbookPlugin {
     async fn catalog(
         &self,
+        catalog_name: &str,
         table_namespace: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Catalog>, Error> {
-        let catalog_name = self.config.catalog.split("/").last().ok_or(Error::Text(
-            "Catalog url doesn't contain catalog name.".to_string(),
-        ))?;
-
+        let catalog_name = catalog_name.to_owned();
         let role = get_role(
             &self.access_token,
             &catalog_name,
@@ -79,7 +78,7 @@ impl Plugin for DashbookPlugin {
 
         let catalog = {
             let mut catalogs = self.catalogs.lock().await;
-            match catalogs.get(&role) {
+            match catalogs.get(&(catalog_name.clone(), role.clone())) {
                 Some(catalog) => catalog.clone(),
                 None => {
                     let catalog = get_catalog(
@@ -91,7 +90,7 @@ impl Plugin for DashbookPlugin {
                         &role,
                     )
                     .await?;
-                    catalogs.insert(role, catalog.clone());
+                    catalogs.insert((catalog_name, role), catalog.clone());
                     catalog
                 }
             }

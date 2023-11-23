@@ -6,7 +6,7 @@ use iceberg_rust::sql::find_relations;
 use target_iceberg_nessie::config::Config as SingerConfig;
 
 use crate::{
-    dag::{Dag, Node, Singer, Tabular},
+    dag::{identifier::FullIdentifier, Dag, Node, Singer, Tabular},
     error::Error,
 };
 
@@ -38,18 +38,19 @@ pub(super) fn update_dag<'repo>(diff: Diff<'repo>, dag: Option<Dag>) -> Result<D
     }
 
     for path in singers {
-        let parent = Path::new(path)
-            .parent()
-            .ok_or(Error::Anyhow(anyhow!(
-                "target.json must be inside a subfolder."
-            )))?
-            .to_str()
-            .ok_or(Error::Anyhow(anyhow!("Failed to convert path to string.")))?;
-        let tap_path = parent.to_string() + "/tap.json";
-        let tap = fs::read_to_string(&tap_path)?;
+        let parent_path = Path::new(path).parent().ok_or(Error::Anyhow(anyhow!(
+            "target.json must be inside a subfolder."
+        )))?;
+        let tap_path = parent_path.join("tap.json");
+        let tap_json = fs::read_to_string(&tap_path)?;
         let target_json = fs::read_to_string(path)?;
         let target: SingerConfig = serde_json::from_str(&target_json)?;
-        dag.add_node(Node::Singer(Singer::new(parent, tap, target, "main")));
+        let identifier = parent_path
+            .to_str()
+            .ok_or(Error::Anyhow(anyhow!("Failed to convert path to string.")))?;
+        dag.add_node(Node::Singer(Singer::new(
+            identifier, tap_json, target, "main",
+        )));
     }
 
     for path in tabulars {
@@ -57,14 +58,7 @@ pub(super) fn update_dag<'repo>(diff: Diff<'repo>, dag: Option<Dag>) -> Result<D
 
         let children = find_relations(&sql)?;
 
-        dbg!(&children);
-
-        let identifier = path
-            .to_str()
-            .ok_or(Error::Text("No new file in delta".to_string()))?
-            .trim_start_matches("/")
-            .trim_end_matches(".sql")
-            .replace("/", ".");
+        let identifier = FullIdentifier::parse_path(&path)?.to_string();
 
         dag.add_node(Node::Tabular(Tabular::new(&identifier, "main")));
 

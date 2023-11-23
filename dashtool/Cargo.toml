@@ -9,7 +9,7 @@ edition = "2021"
 argo-workflow = { path = "../argo-workflow" }
 clap = { version = "4.4", features = ["derive"] }
 dashbook-catalog = { git = "https://github.com/dashbook/dashbook-catalog.git" }
-datafusion_iceberg = { git = "https://github.com/JanKaul/iceberg-rust.git" }
+datafusion-iceberg-sql = { git = "https://github.com/JanKaul/iceberg-rust.git" }
 datafusion-sql = "33.0.0"
 git2 = "0.18"
 iceberg-rust = { git = "https://github.com/JanKaul/iceberg-rust.git" }
@@ -33,6 +33,7 @@ arrow-schema = "48.0.1"
 target-iceberg-nessie = { git = "https://github.com/dashbook/target-iceberg-nessie.git" }
 serde_yaml = "0.9.25"
 async-trait = "0.1"
+derive-getters = "0.3.0"
 
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

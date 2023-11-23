@@ -1,9 +1,10 @@
-use std::{fs, sync::Arc};
+use std::{collections::HashMap, fs, sync::Arc};
 
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
 use async_trait::async_trait;
+use futures::{stream, StreamExt};
 use iceberg_catalog_sql::SqlCatalog;
-use iceberg_rust::catalog::Catalog;
+use iceberg_rust::catalog::{identifier::Identifier, Catalog};
 use object_store::{aws::AmazonS3Builder, memory::InMemory, ObjectStore};
 use serde::{Deserialize, Serialize};
 
@@ -21,10 +22,12 @@ pub struct Config {
     pub secret_name: String,
     pub access_key_id: Option<String>,
     pub secret_access_key: Option<String>,
+    pub includes: Vec<Config>,
 }
 
 pub struct SqlPlugin {
     catalog: Arc<dyn Catalog>,
+    includes: HashMap<String, Arc<dyn Catalog>>,
 }
 
 impl SqlPlugin {
@@ -62,14 +65,21 @@ impl SqlPlugin {
 
         let catalog = Arc::new(SqlCatalog::new(&config.url, &config.name, object_store).await?);
 
-        Ok(SqlPlugin { catalog })
+        Ok(SqlPlugin {
+            catalog,
+            // TODO!!
+            includes: HashMap::new(),
+        })
     }
 }
 
 #[cfg(test)]
 impl SqlPlugin {
-    pub(crate) fn new_with_catalog(catalog: Arc<dyn Catalog>) -> Result<Self, Error> {
-        Ok(SqlPlugin { catalog })
+    pub(crate) fn new_with_catalogs(
+        catalog: Arc<dyn Catalog>,
+        includes: HashMap<String, Arc<dyn Catalog>>,
+    ) -> Result<Self, Error> {
+        Ok(SqlPlugin { catalog, includes })
     }
 }
 
@@ -77,10 +87,35 @@ impl SqlPlugin {
 impl Plugin for SqlPlugin {
     async fn catalog(
         &self,
-        _table_namespace: &str,
-        _table_name: &str,
+        catalog_name: &str,
+        table_namespace: &str,
+        table_name: &str,
     ) -> Result<Arc<dyn Catalog>, Error> {
-        Ok(self.catalog.clone())
+        let identifier = Identifier::parse(&(table_namespace.to_string() + "." + table_name))?;
+        let catalog = Box::pin(
+            stream::iter(self.includes.iter()).filter_map(|(name, catalog)| {
+                let identifier = identifier.clone();
+                async move {
+                    catalog
+                        .clone()
+                        .table_exists(&identifier)
+                        .await
+                        .map(|x| {
+                            if x && name == catalog_name {
+                                Some(catalog)
+                            } else {
+                                None
+                            }
+                        })
+                        .transpose()
+                }
+            }),
+        )
+        .next()
+        .await
+        .transpose()?;
+
+        Ok(catalog.cloned().unwrap_or(self.catalog.clone()))
     }
     fn init_containters(
         &self,

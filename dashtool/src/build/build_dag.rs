@@ -1,14 +1,12 @@
 use std::{collections::HashMap, ffi::OsStr, fs, path::Path, sync::Arc};
 
 use anyhow::anyhow;
-use datafusion_iceberg::sql::get_schema;
+use datafusion_iceberg_sql::schema::get_schema;
 use futures::{channel::mpsc::unbounded, stream, SinkExt, StreamExt, TryStreamExt};
 use git2::{Delta, Diff};
 use iceberg_rust::{
-    catalog::{identifier::Identifier, tabular::Tabular as IcebergTabular},
-    error::Error as IcebergError,
-    materialized_view::materialized_view_builder::MaterializedViewBuilder,
-    sql::find_relations,
+    catalog::tabular::Tabular as IcebergTabular, error::Error as IcebergError,
+    materialized_view::materialized_view_builder::MaterializedViewBuilder, sql::find_relations,
 };
 use iceberg_rust_spec::spec::{
     schema::Schema,
@@ -18,7 +16,7 @@ use iceberg_rust_spec::spec::{
 use target_iceberg_nessie::config::Config as SingerConfig;
 
 use crate::{
-    dag::{Dag, Node, Singer, Tabular},
+    dag::{identifier::FullIdentifier, Dag, Node, Singer, Tabular},
     error::Error,
     plugins::Plugin,
 };
@@ -54,28 +52,22 @@ pub(super) async fn build_dag<'repo>(
                 };
                 match is_tabular {
                     Some(true) => {
-                        let table_name = path
-                            .file_name()
-                            .ok_or(Error::Text("Path doesn't contain file.".to_string()))?
-                            .to_str()
-                            .unwrap()
-                            .trim_end_matches(".sql");
-                        let table_namespace = path
-                            .parent()
-                            .ok_or(Error::Text("Path doesn't have parent folder.".to_string()))?
-                            .to_str()
-                            .unwrap();
-                        let identifier = table_namespace.to_string() + "." + table_name;
+                        let identifier = FullIdentifier::parse_path(&path)?;
 
-                        let catalog = plugin.catalog(table_namespace, table_name).await?;
+                        let catalog = plugin
+                            .catalog(
+                                &identifier.catalog_name(),
+                                &identifier.namespace_name(),
+                                &identifier.table_name(),
+                            )
+                            .await?;
 
                         let sql = fs::read_to_string(path)?;
                         let relations = find_relations(&sql)?;
 
                         match (delta.status(), merged_branch) {
                             (Delta::Added | Delta::Modified, Some(merged_branch)) => {
-                                let tabular =
-                                    catalog.load_table(&Identifier::parse(&identifier)?).await?;
+                                let tabular = catalog.load_table(&identifier.identifier()?).await?;
                                 let mut matview =
                                     if let IcebergTabular::MaterializedView(matview) = tabular {
                                         Ok(matview)
@@ -116,8 +108,41 @@ pub(super) async fn build_dag<'repo>(
                                     .await?;
                             }
                             (Delta::Added, None) => {
+                                let relations = relations
+                                    .iter()
+                                    .map(|x| {
+                                        FullIdentifier::parse(x).and_then(|y| {
+                                            Ok((
+                                                y.catalog_name().clone(),
+                                                y.namespace_name().clone(),
+                                                y.table_name().clone(),
+                                            ))
+                                        })
+                                    })
+                                    .collect::<Result<Vec<_>, _>>()?;
+
+                                let catalogs = stream::iter(relations.iter())
+                                    .then(|(catalog_name, namespace_name, table_name)| {
+                                        let plugin = plugin.clone();
+                                        async move {
+                                            Ok::<_, Error>((
+                                                catalog_name.clone(),
+                                                plugin
+                                                    .catalog(
+                                                        catalog_name,
+                                                        namespace_name,
+                                                        table_name,
+                                                    )
+                                                    .await?,
+                                            ))
+                                        }
+                                    })
+                                    .try_collect::<HashMap<_, _>>()
+                                    .await?;
+
                                 let fields =
-                                    get_schema(&sql, relations.clone(), catalog.clone()).await?;
+                                    get_schema(&sql, &relations, &catalogs, Some(&branch)).await?;
+
                                 let schema = Schema {
                                     schema_id: 1,
                                     identifier_field_ids: None,
@@ -130,7 +155,7 @@ pub(super) async fn build_dag<'repo>(
                                     .trim_end_matches(".sql");
                                 let mut builder = MaterializedViewBuilder::new(
                                     &sql,
-                                    &identifier,
+                                    &identifier.identifier()?,
                                     schema,
                                     catalog,
                                 )?;
@@ -140,22 +165,25 @@ pub(super) async fn build_dag<'repo>(
                             _ => (),
                         }
 
-                        tabular_sender.send((identifier, relations)).await?;
+                        tabular_sender
+                            .send((identifier.to_string(), relations))
+                            .await?;
                     }
                     Some(false) => {
-                        let parent = Path::new(path)
-                            .parent()
-                            .ok_or(Error::Anyhow(anyhow!(
-                                "target.json must be inside a subfolder."
-                            )))?
-                            .to_str()
-                            .ok_or(Error::Anyhow(anyhow!("Failed to convert path to string.")))?;
-                        let tap_path = parent.to_string() + "/tap.json";
-                        let tap = fs::read_to_string(&tap_path)?;
+                        let parent_path = Path::new(path).parent().ok_or(Error::Anyhow(
+                            anyhow!("target.json must be inside a subfolder."),
+                        ))?;
+                        let tap_path = parent_path.join("tap.json");
+                        let tap_json = fs::read_to_string(&tap_path)?;
                         let target_json = fs::read_to_string(path)?;
                         let target: SingerConfig = serde_json::from_str(&target_json)?;
+                        let identifier = parent_path
+                            .to_str()
+                            .ok_or(Error::Anyhow(anyhow!("Failed to convert path to string.")))?;
                         singer_sender
-                            .send(Node::Singer(Singer::new(parent, tap, target, branch)))
+                            .send(Node::Singer(Singer::new(
+                                identifier, tap_json, target, branch,
+                            )))
                             .await?;
                     }
                     _ => (),
@@ -193,6 +221,7 @@ pub(super) async fn build_dag<'repo>(
 #[cfg(test)]
 mod tests {
     use std::{
+        collections::HashMap,
         env,
         fs::{self, File},
         io::Write,
@@ -202,7 +231,10 @@ mod tests {
 
     use git2::DiffOptions;
     use iceberg_catalog_sql::SqlCatalog;
-    use iceberg_rust::table::table_builder::TableBuilder;
+    use iceberg_rust::{
+        catalog::{identifier::Identifier, tabular::Tabular, Catalog},
+        table::table_builder::TableBuilder,
+    };
     use iceberg_rust_spec::spec::{
         partition::{PartitionField, PartitionSpecBuilder, Transform},
         schema::Schema,
@@ -213,7 +245,7 @@ mod tests {
     use crate::{
         build::{build_dag::build_dag, update_dag::update_dag},
         dag::Node,
-        plugins::sql::SqlPlugin,
+        plugins::{sql::SqlPlugin, Plugin},
         test::repo_init,
     };
 
@@ -307,7 +339,8 @@ mod tests {
                    "name": "iceberg",
 	               "url": "sqlite://",
 	               "region": "null",
-	               "secretName": "null"
+	               "secretName": "null",
+	               "includes": []
                 }
                 "#
                 .as_bytes(),
@@ -459,8 +492,14 @@ mod tests {
 
         let object_store = Arc::new(InMemory::new());
 
-        let catalog = Arc::new(
-            SqlCatalog::new("sqlite://", "iceberg", object_store)
+        let bronze_catalog = Arc::new(
+            SqlCatalog::new("sqlite://", "bronze", object_store.clone())
+                .await
+                .expect("Failed to create catalog"),
+        ) as Arc<dyn Catalog>;
+
+        let silver_catalog = Arc::new(
+            SqlCatalog::new("sqlite://", "silver", object_store)
                 .await
                 .expect("Failed to create catalog"),
         );
@@ -518,7 +557,7 @@ mod tests {
             .build()
             .expect("Failed to create partition spec");
 
-        let mut builder = TableBuilder::new("bronze.inventory.orders", catalog.clone())
+        let mut builder = TableBuilder::new("inventory.orders", bronze_catalog.clone())
             .expect("Failed to create table builder");
         builder
             .location("/bronze/inventory/orders")
@@ -529,10 +568,15 @@ mod tests {
 
         builder.build().await.expect("Failed to create table.");
 
-        let plugin =
-            Arc::new(SqlPlugin::new_with_catalog(catalog).expect("Failed to create plugin"));
+        let plugin = Arc::new(
+            SqlPlugin::new_with_catalogs(
+                silver_catalog,
+                HashMap::from_iter(vec![("bronze".to_string(), bronze_catalog)]),
+            )
+            .expect("Failed to create plugin"),
+        );
 
-        build_dag(&mut dag, main_diff, plugin, "main", None)
+        build_dag(&mut dag, main_diff, plugin.clone(), "main", None)
             .await
             .expect("Failed to build dag");
 
@@ -549,6 +593,37 @@ mod tests {
             panic!("Node is not a singer")
         };
 
-        assert_eq!(tabular.identifier, "silver.inventory.factOrder")
+        assert_eq!(tabular.identifier, "silver.inventory.factOrder");
+
+        let catalog = plugin
+            .catalog("silver", "inventory", "factOrder")
+            .await
+            .expect("Failed to get catalog");
+
+        let matview = if let Tabular::MaterializedView(matview) = catalog
+            .load_table(
+                &Identifier::parse("inventory.factOrder").expect("Failed to parse identifier"),
+            )
+            .await
+            .expect("Failed to load table")
+        {
+            matview
+        } else {
+            panic!("Result is not a materialized view")
+        };
+
+        let schema = matview
+            .metadata()
+            .current_schema(None)
+            .expect("Failed to get schema");
+
+        assert_eq!(schema.fields.fields[0].name, "product_id");
+        assert_eq!(schema.fields.fields[0].field_type.to_string(), "long");
+
+        assert_eq!(
+            schema.fields.fields[1].name,
+            "SUM(bronze.inventory.orders.amount)"
+        );
+        assert_eq!(schema.fields.fields[1].field_type.to_string(), "long");
     }
 }

@@ -13,6 +13,7 @@ pub mod sql;
 pub trait Plugin {
     async fn catalog(
         &self,
+        catalog_name: &str,
         table_namespace: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Catalog>, Error>;

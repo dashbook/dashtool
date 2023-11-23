@@ -21,8 +21,6 @@ pub enum Error {
     #[error(transparent)]
     IcebergSqlCatalog(#[from] iceberg_catalog_sql::error::Error),
     #[error(transparent)]
-    DatafusionIceberg(#[from] datafusion_iceberg::error::Error),
-    #[error(transparent)]
     Git(#[from] git2::Error),
     #[error(transparent)]
     OIDCDiscovery(
