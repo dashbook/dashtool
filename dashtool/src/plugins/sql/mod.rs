@@ -2,10 +2,10 @@ use std::{collections::HashMap, fs, sync::Arc};
 
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
 use async_trait::async_trait;
-use futures::{stream, StreamExt};
+use futures::lock::Mutex;
 use iceberg_catalog_sql::SqlCatalog;
-use iceberg_rust::catalog::{identifier::Identifier, Catalog};
-use object_store::{aws::AmazonS3Builder, memory::InMemory, ObjectStore};
+use iceberg_rust::catalog::Catalog;
+use object_store::{aws::AmazonS3Builder, ObjectStore};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
@@ -15,19 +15,16 @@ use super::Plugin;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
-    pub name: String,
     pub url: String,
     pub region: String,
-    pub bucket: Option<String>,
+    pub bucket: String,
     pub secret_name: String,
-    pub access_key_id: Option<String>,
-    pub secret_access_key: Option<String>,
-    pub includes: Vec<Config>,
 }
 
 pub struct SqlPlugin {
-    catalog: Arc<dyn Catalog>,
-    includes: HashMap<String, Arc<dyn Catalog>>,
+    config: Config,
+    catalog: Arc<SqlCatalog>,
+    catalogs: Arc<Mutex<HashMap<String, Arc<dyn Catalog>>>>,
 }
 
 impl SqlPlugin {
@@ -35,51 +32,40 @@ impl SqlPlugin {
         let config_json = fs::read_to_string(path)?;
         let config: Config = serde_json::from_str(&config_json)?;
 
-        let object_store = if let Some(bucket) = config.bucket {
-            Ok(Arc::new(
-                AmazonS3Builder::new()
-                    .with_region(&config.region)
-                    .with_bucket_name(&bucket)
-                    .with_access_key_id(
-                        config
-                            .access_key_id
-                            .as_ref()
-                            .ok_or(Error::NoToken("ACCESS_KEY_ID".to_string()))?,
-                    )
-                    .with_secret_access_key(
-                        config
-                            .secret_access_key
-                            .as_ref()
-                            .ok_or(Error::NoToken("SECRET_ACCESS_KEY".to_string()))?,
-                    )
-                    .build()?,
-            ) as Arc<dyn ObjectStore>)
-        } else {
-            // Enables InMemory ObjectStore for tests
-            if cfg!(test) {
-                Ok(Arc::new(InMemory::new()) as Arc<dyn ObjectStore>)
-            } else {
-                Err(Error::NoToken("BUCKET".to_string()))
-            }
-        }?;
+        let object_store = Arc::new(
+            AmazonS3Builder::from_env()
+                .with_region(&config.region)
+                .with_bucket_name(&config.bucket)
+                .build()?,
+        ) as Arc<dyn ObjectStore>;
 
-        let catalog = Arc::new(SqlCatalog::new(&config.url, &config.name, object_store).await?);
+        let catalog = Arc::new(SqlCatalog::new(&config.url, "__template", object_store).await?);
+
+        let catalogs: Arc<Mutex<HashMap<String, Arc<dyn Catalog>>>> =
+            Arc::new(Mutex::new(HashMap::new()));
 
         Ok(SqlPlugin {
+            config,
             catalog,
-            // TODO!!
-            includes: HashMap::new(),
+            catalogs,
         })
     }
 }
 
 #[cfg(test)]
 impl SqlPlugin {
-    pub(crate) fn new_with_catalogs(
-        catalog: Arc<dyn Catalog>,
-        includes: HashMap<String, Arc<dyn Catalog>>,
+    pub(crate) fn new_with_catalog(
+        config: Config,
+        catalog: Arc<SqlCatalog>,
     ) -> Result<Self, Error> {
-        Ok(SqlPlugin { catalog, includes })
+        let catalogs: Arc<Mutex<HashMap<String, Arc<dyn Catalog>>>> =
+            Arc::new(Mutex::new(HashMap::new()));
+
+        Ok(SqlPlugin {
+            config,
+            catalog,
+            catalogs,
+        })
     }
 }
 
@@ -88,37 +74,22 @@ impl Plugin for SqlPlugin {
     async fn catalog(
         &self,
         catalog_name: &str,
-        table_namespace: &str,
-        table_name: &str,
+        _table_namespace: &str,
+        _table_name: &str,
     ) -> Result<Arc<dyn Catalog>, Error> {
-        let identifier = Identifier::parse(&(table_namespace.to_string() + "." + table_name))?;
-        let catalog = Box::pin(
-            stream::iter(self.includes.iter()).filter_map(|(name, catalog)| {
-                let identifier = identifier.clone();
-                async move {
-                    catalog
-                        .clone()
-                        .table_exists(&identifier)
-                        .await
-                        .map(|x| {
-                            if x && name == catalog_name {
-                                Some(catalog)
-                            } else {
-                                None
-                            }
-                        })
-                        .transpose()
-                }
-            }),
-        )
-        .next()
-        .await
-        .transpose()?;
+        let catalog_name = catalog_name.to_owned();
 
-        Ok(catalog.cloned().unwrap_or(self.catalog.clone()))
+        let catalog = {
+            let mut catalogs = self.catalogs.lock().await;
+            catalogs
+                .entry(catalog_name.clone())
+                .or_insert(Arc::new(self.catalog.duplicate(&catalog_name)))
+                .clone()
+        };
+        Ok(catalog)
     }
     fn bucket(&self) -> &str {
-        unimplemented!()
+        &self.config.bucket
     }
     fn init_containters(
         &self,

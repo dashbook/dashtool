@@ -222,10 +222,10 @@ pub(super) async fn build_dag<'repo>(
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::HashMap,
         env,
         fs::{self, File},
         io::Write,
+        ops::Deref,
         path::Path,
         sync::Arc,
     };
@@ -233,7 +233,7 @@ mod tests {
     use git2::DiffOptions;
     use iceberg_catalog_sql::SqlCatalog;
     use iceberg_rust::{
-        catalog::{identifier::Identifier, tabular::Tabular, Catalog},
+        catalog::{identifier::Identifier, tabular::Tabular},
         table::table_builder::TableBuilder,
     };
     use iceberg_rust_spec::spec::{
@@ -246,7 +246,10 @@ mod tests {
     use crate::{
         build::{build_dag::build_dag, update_dag::update_dag},
         dag::Node,
-        plugins::{sql::SqlPlugin, Plugin},
+        plugins::{
+            sql::{Config, SqlPlugin},
+            Plugin,
+        },
         test::repo_init,
     };
 
@@ -337,11 +340,10 @@ mod tests {
             .write_all(
                 r#"
                 {
-                   "name": "iceberg",
 	               "url": "sqlite://",
 	               "region": "null",
-	               "secretName": "null",
-	               "includes": []
+	               "bucket": "null",
+	               "secretName": "null"
                 }
                 "#
                 .as_bytes(),
@@ -497,13 +499,9 @@ mod tests {
             SqlCatalog::new("sqlite://", "bronze", object_store.clone())
                 .await
                 .expect("Failed to create catalog"),
-        ) as Arc<dyn Catalog>;
-
-        let silver_catalog = Arc::new(
-            SqlCatalog::new("sqlite://", "silver", object_store)
-                .await
-                .expect("Failed to create catalog"),
         );
+
+        let silver_catalog = Arc::new(bronze_catalog.deref().duplicate("silver"));
 
         let schema = Schema {
             schema_id: 1,
@@ -569,12 +567,15 @@ mod tests {
 
         builder.build().await.expect("Failed to create table.");
 
+        let config = Config {
+            url: "sqlite://".to_owned(),
+            region: "".to_owned(),
+            bucket: "".to_owned(),
+            secret_name: "".to_owned(),
+        };
+
         let plugin = Arc::new(
-            SqlPlugin::new_with_catalogs(
-                silver_catalog,
-                HashMap::from_iter(vec![("bronze".to_string(), bronze_catalog)]),
-            )
-            .expect("Failed to create plugin"),
+            SqlPlugin::new_with_catalog(config, silver_catalog).expect("Failed to create plugin"),
         );
 
         build_dag(&mut dag, main_diff, plugin.clone(), "main", None)

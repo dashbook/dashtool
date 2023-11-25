@@ -78,10 +78,10 @@ impl Plugin for DashbookPlugin {
 
         let catalog = {
             let mut catalogs = self.catalogs.lock().await;
-            match catalogs.get(&(catalog_name.clone(), role.clone())) {
-                Some(catalog) => catalog.clone(),
-                None => {
-                    let catalog = get_catalog(
+            catalogs
+                .entry((catalog_name.clone(), role.clone()))
+                .or_insert(
+                    get_catalog(
                         &self.config.catalog,
                         &self.access_token,
                         &self.id_token,
@@ -89,11 +89,9 @@ impl Plugin for DashbookPlugin {
                         &table_name,
                         &role,
                     )
-                    .await?;
-                    catalogs.insert((catalog_name, role), catalog.clone());
-                    catalog
-                }
-            }
+                    .await?,
+                )
+                .clone()
         };
         Ok(catalog)
     }
