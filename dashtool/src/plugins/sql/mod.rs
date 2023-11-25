@@ -117,6 +117,9 @@ impl Plugin for SqlPlugin {
 
         Ok(catalog.cloned().unwrap_or(self.catalog.clone()))
     }
+    fn bucket(&self) -> &str {
+        unimplemented!()
+    }
     fn init_containters(
         &self,
     ) -> Result<Option<Vec<IoArgoprojWorkflowV1alpha1UserContainer>>, Error> {

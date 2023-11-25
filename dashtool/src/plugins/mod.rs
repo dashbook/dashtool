@@ -17,6 +17,7 @@ pub trait Plugin {
         table_namespace: &str,
         table_name: &str,
     ) -> Result<Arc<dyn Catalog>, Error>;
+    fn bucket(&self) -> &str;
     fn init_containters(
         &self,
     ) -> Result<Option<Vec<IoArgoprojWorkflowV1alpha1UserContainer>>, Error>;

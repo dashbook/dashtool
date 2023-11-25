@@ -7,9 +7,9 @@ use argo_workflow::schema::{
 };
 use async_trait::async_trait;
 use dashbook_catalog::{get_catalog, get_role};
+use futures::lock::Mutex;
 use iceberg_rust::catalog::Catalog;
 use serde::{Deserialize, Serialize};
-use tokio::sync::Mutex;
 
 use crate::error::Error;
 
@@ -96,6 +96,9 @@ impl Plugin for DashbookPlugin {
             }
         };
         Ok(catalog)
+    }
+    fn bucket(&self) -> &str {
+        &self.config.bucket
     }
     fn init_containters(
         &self,

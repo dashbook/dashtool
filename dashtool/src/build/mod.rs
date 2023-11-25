@@ -58,7 +58,7 @@ pub async fn build(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
 
     let last_main_diff = diff(&repo, &None, &main_id)?;
 
-    let mut dag = update_dag(last_main_diff, None)?;
+    let mut dag = update_dag(last_main_diff, None, "main")?;
 
     let main_diff = diff(&repo, &last_main_id, &main_id)?;
 
@@ -73,7 +73,7 @@ pub async fn build(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
 
     let last_diff = diff(&repo, &main_id, &last_id)?;
 
-    let mut dag = update_dag(last_diff, Some(dag))?;
+    let mut dag = update_dag(last_diff, Some(dag), &current_branch)?;
 
     let diff = diff(&repo, &last_id, &current_id)?;
 

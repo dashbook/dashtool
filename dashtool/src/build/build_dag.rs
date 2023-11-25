@@ -148,11 +148,12 @@ pub(super) async fn build_dag<'repo>(
                                     identifier_field_ids: None,
                                     fields,
                                 };
-                                let base_path = path
-                                    .to_str()
-                                    .ok_or(Error::Text("No new file in delta".to_string()))?
-                                    .trim_start_matches("/")
-                                    .trim_end_matches(".sql");
+                                let base_path = plugin.bucket().trim_end_matches("/").to_string()
+                                    + path
+                                        .to_str()
+                                        .ok_or(Error::Text("No new file in delta".to_string()))?
+                                        .trim_start_matches("/")
+                                        .trim_end_matches(".sql");
                                 let mut builder = MaterializedViewBuilder::new(
                                     &sql,
                                     &identifier.identifier()?,
@@ -328,7 +329,7 @@ mod tests {
             .diff_tree_to_index(None, Some(&index), Some(&mut opts))
             .expect("Failed to create diff for repo");
 
-        let mut dag = update_dag(last_main_diff, None).expect("Failed to create dag");
+        let mut dag = update_dag(last_main_diff, None, "main").expect("Failed to create dag");
 
         let config_path = temp_dir.path().join(Path::new("dashtool.json"));
         File::create(&config_path)
@@ -488,7 +489,7 @@ mod tests {
             .diff_tree_to_index(None, Some(&index), Some(&mut opts))
             .expect("Failed to create diff for repo");
 
-        let mut dag = update_dag(last_main_diff, None).expect("Failed to create dag");
+        let mut dag = update_dag(last_main_diff, None, "main").expect("Failed to create dag");
 
         let object_store = Arc::new(InMemory::new());
 
