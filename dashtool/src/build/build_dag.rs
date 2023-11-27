@@ -225,15 +225,14 @@ mod tests {
         env,
         fs::{self, File},
         io::Write,
-        ops::Deref,
         path::Path,
         sync::Arc,
     };
 
     use git2::DiffOptions;
-    use iceberg_catalog_sql::SqlCatalog;
+    use iceberg_catalog_sql::SqlCatalogList;
     use iceberg_rust::{
-        catalog::{identifier::Identifier, tabular::Tabular},
+        catalog::{identifier::Identifier, tabular::Tabular, CatalogList},
         table::table_builder::TableBuilder,
     };
     use iceberg_rust_spec::spec::{
@@ -495,13 +494,16 @@ mod tests {
 
         let object_store = Arc::new(InMemory::new());
 
-        let bronze_catalog = Arc::new(
-            SqlCatalog::new("sqlite://", "bronze", object_store.clone())
+        let catalog_list = Arc::new(
+            SqlCatalogList::new("sqlite://", object_store.clone())
                 .await
-                .expect("Failed to create catalog"),
+                .expect("Failed to create catalog list"),
         );
 
-        let silver_catalog = Arc::new(bronze_catalog.deref().duplicate("silver"));
+        let bronze_catalog = catalog_list
+            .catalog("bronze")
+            .await
+            .expect("Failed to create catalog");
 
         let schema = Schema {
             schema_id: 1,
@@ -575,7 +577,7 @@ mod tests {
         };
 
         let plugin = Arc::new(
-            SqlPlugin::new_with_catalog(config, silver_catalog).expect("Failed to create plugin"),
+            SqlPlugin::new_with_catalog(config, catalog_list).expect("Failed to create plugin"),
         );
 
         build_dag(&mut dag, main_diff, plugin.clone(), "main", None)

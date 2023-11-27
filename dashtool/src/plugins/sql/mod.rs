@@ -1,10 +1,9 @@
-use std::{collections::HashMap, fs, sync::Arc};
+use std::{fs, sync::Arc};
 
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
 use async_trait::async_trait;
-use futures::lock::Mutex;
-use iceberg_catalog_sql::SqlCatalog;
-use iceberg_rust::catalog::Catalog;
+use iceberg_catalog_sql::SqlCatalogList;
+use iceberg_rust::catalog::{Catalog, CatalogList};
 use object_store::{aws::AmazonS3Builder, ObjectStore};
 use serde::{Deserialize, Serialize};
 
@@ -23,8 +22,7 @@ pub struct Config {
 
 pub struct SqlPlugin {
     config: Config,
-    catalog: Arc<SqlCatalog>,
-    catalogs: Arc<Mutex<HashMap<String, Arc<dyn Catalog>>>>,
+    catalog_list: Arc<dyn CatalogList>,
 }
 
 impl SqlPlugin {
@@ -39,15 +37,11 @@ impl SqlPlugin {
                 .build()?,
         ) as Arc<dyn ObjectStore>;
 
-        let catalog = Arc::new(SqlCatalog::new(&config.url, "__template", object_store).await?);
-
-        let catalogs: Arc<Mutex<HashMap<String, Arc<dyn Catalog>>>> =
-            Arc::new(Mutex::new(HashMap::new()));
+        let catalog_list = Arc::new(SqlCatalogList::new(&config.url, object_store).await?);
 
         Ok(SqlPlugin {
             config,
-            catalog,
-            catalogs,
+            catalog_list,
         })
     }
 }
@@ -56,15 +50,11 @@ impl SqlPlugin {
 impl SqlPlugin {
     pub(crate) fn new_with_catalog(
         config: Config,
-        catalog: Arc<SqlCatalog>,
+        catalog_list: Arc<SqlCatalogList>,
     ) -> Result<Self, Error> {
-        let catalogs: Arc<Mutex<HashMap<String, Arc<dyn Catalog>>>> =
-            Arc::new(Mutex::new(HashMap::new()));
-
         Ok(SqlPlugin {
             config,
-            catalog,
-            catalogs,
+            catalog_list,
         })
     }
 }
@@ -77,16 +67,10 @@ impl Plugin for SqlPlugin {
         _table_namespace: &str,
         _table_name: &str,
     ) -> Result<Arc<dyn Catalog>, Error> {
-        let catalog_name = catalog_name.to_owned();
-
-        let catalog = {
-            let mut catalogs = self.catalogs.lock().await;
-            catalogs
-                .entry(catalog_name.clone())
-                .or_insert(Arc::new(self.catalog.duplicate(&catalog_name)))
-                .clone()
-        };
-        Ok(catalog)
+        self.catalog_list
+            .catalog(catalog_name)
+            .await
+            .ok_or(Error::Text(format!("Catalog {} not found", catalog_name)))
     }
     fn bucket(&self) -> &str {
         &self.config.bucket
