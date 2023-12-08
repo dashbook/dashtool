@@ -21,11 +21,9 @@ mod openid;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
-    pub catalog: String,
     pub bucket: String,
-    pub includes: Vec<[String; 2]>,
-    pub issuer: String,
-    pub client_id: String,
+    pub issuer: Option<String>,
+    pub client_id: Option<String>,
 }
 
 pub struct DashbookPlugin {
@@ -40,8 +38,14 @@ impl DashbookPlugin {
 
         let refresh_token = get_refresh_token(&config).await?;
 
-        let (access_token, id_token) =
-            authorization(&config.issuer, &config.client_id, &refresh_token).await?;
+        let issuer = config
+            .issuer
+            .as_deref()
+            .unwrap_or("https://auth.dashbook.dev/realms/dashbook");
+
+        let client_id = config.issuer.as_deref().unwrap_or("dashbook");
+
+        let (access_token, id_token) = authorization(issuer, client_id, &refresh_token).await?;
 
         let catalog_list = Arc::new(DashbookS3CatalogList::new(&access_token, &id_token));
 

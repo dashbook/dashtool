@@ -96,7 +96,14 @@ pub(crate) async fn get_refresh_token(config: &Config) -> Result<String, Error> 
 }
 
 pub(crate) async fn fetch_refresh_token(config: &Config) -> Result<String, Error> {
-    let refresh_token = authentication(&config.issuer, &config.client_id).await?;
+    let issuer = config
+        .issuer
+        .as_deref()
+        .unwrap_or("https://auth.dashbook.dev/realms/dashbook");
+
+    let client_id = config.issuer.as_deref().unwrap_or("dashbook");
+
+    let refresh_token = authentication(issuer, client_id).await?;
     fs::write(
         dirs::config_local_dir()
             .and_then(|x| Some(String::from_str(x.to_str()?).ok()?))
