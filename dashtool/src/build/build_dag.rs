@@ -13,7 +13,6 @@ use iceberg_rust_spec::spec::{
     snapshot::{Reference, Retention},
     view_metadata::REF_PREFIX,
 };
-use target_iceberg_nessie::config::Config as SingerConfig;
 
 use crate::{
     dag::{identifier::FullIdentifier, Dag, Node, Singer, Tabular},
@@ -32,10 +31,14 @@ pub(super) async fn build_dag<'repo>(
     let (tabular_sender, tabular_reciever) = unbounded();
     let (singer_sender, singer_reciever) = unbounded();
 
+    let catalog_list = plugin.catalog_list().await?;
+
     stream::iter(diff.deltas())
         .map(Ok::<_, Error>)
         .try_for_each(|delta| {
             let plugin = plugin.clone();
+            let catalog_list = catalog_list.clone();
+
             let mut tabular_sender = tabular_sender.clone();
             let mut singer_sender = singer_sender.clone();
             async move {
@@ -54,13 +57,11 @@ pub(super) async fn build_dag<'repo>(
                     Some(true) => {
                         let identifier = FullIdentifier::parse_path(&path)?;
 
-                        let catalog = plugin
-                            .catalog(
-                                &identifier.catalog_name(),
-                                &identifier.namespace_name(),
-                                &identifier.table_name(),
-                            )
-                            .await?;
+                        let catalog_name = identifier.catalog_name();
+
+                        let catalog = catalog_list.catalog(catalog_name).await.ok_or(
+                            IcebergError::NotFound(format!("Catalog"), catalog_name.to_string()),
+                        )?;
 
                         let sql = fs::read_to_string(path)?;
                         let relations = find_relations(&sql)?;
@@ -121,34 +122,23 @@ pub(super) async fn build_dag<'repo>(
                                     })
                                     .collect::<Result<Vec<_>, _>>()?;
 
-                                let catalogs = stream::iter(relations.iter())
-                                    .then(|(catalog_name, namespace_name, table_name)| {
-                                        let plugin = plugin.clone();
-                                        async move {
-                                            Ok::<_, Error>((
-                                                catalog_name.clone(),
-                                                plugin
-                                                    .catalog(
-                                                        catalog_name,
-                                                        namespace_name,
-                                                        table_name,
-                                                    )
-                                                    .await?,
-                                            ))
-                                        }
-                                    })
-                                    .try_collect::<HashMap<_, _>>()
-                                    .await?;
-
-                                let fields =
-                                    get_schema(&sql, &relations, &catalogs, Some(&branch)).await?;
+                                let fields = get_schema(
+                                    &sql,
+                                    &relations,
+                                    catalog_list.clone(),
+                                    Some(&branch),
+                                )
+                                .await?;
 
                                 let schema = Schema {
                                     schema_id: 1,
                                     identifier_field_ids: None,
                                     fields,
                                 };
-                                let base_path = plugin.bucket().trim_end_matches("/").to_string()
+                                let base_path = plugin
+                                    .bucket(&catalog_name)
+                                    .trim_end_matches("/")
+                                    .to_string()
                                     + path
                                         .to_str()
                                         .ok_or(Error::Text("No new file in delta".to_string()))?
@@ -175,15 +165,17 @@ pub(super) async fn build_dag<'repo>(
                             anyhow!("target.json must be inside a subfolder."),
                         ))?;
                         let tap_path = parent_path.join("tap.json");
-                        let tap_json = fs::read_to_string(&tap_path)?;
-                        let target_json = fs::read_to_string(path)?;
-                        let target: SingerConfig = serde_json::from_str(&target_json)?;
+                        let tap_json = serde_json::from_str(&fs::read_to_string(&tap_path)?)?;
+                        let target_json = serde_json::from_str(&fs::read_to_string(path)?)?;
                         let identifier = parent_path
                             .to_str()
                             .ok_or(Error::Anyhow(anyhow!("Failed to convert path to string.")))?;
                         singer_sender
                             .send(Node::Singer(Singer::new(
-                                identifier, tap_json, target, branch,
+                                identifier,
+                                tap_json,
+                                target_json,
+                                branch,
                             )))
                             .await?;
                     }
@@ -380,7 +372,7 @@ mod tests {
         };
 
         assert_eq!(
-            singer.target.image,
+            singer.target["image"],
             "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg"
         );
     }
@@ -599,8 +591,13 @@ mod tests {
 
         assert_eq!(tabular.identifier, "silver.inventory.factOrder");
 
-        let catalog = plugin
-            .catalog("silver", "inventory", "factOrder")
+        let catalog_list = plugin
+            .catalog_list()
+            .await
+            .expect("Failed to get catalog list.");
+
+        let catalog = catalog_list
+            .catalog("silver")
             .await
             .expect("Failed to get catalog");
 

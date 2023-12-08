@@ -38,11 +38,15 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
             let task = match node {
                 Node::Singer(node) => {
                     templates
-                        .entry(node.target.image.clone())
+                        .entry(serde_json::from_value::<String>(
+                            node.target["image"].clone(),
+                        )?)
                         .or_insert_with(|| singer_template(&node, &*plugin).unwrap());
                     DagTaskBuilder::default()
                         .name(node.identifier.clone())
-                        .template(Some(node.target.image.clone()))
+                        .template(Some(serde_json::from_value::<String>(
+                            node.target["image"].clone(),
+                        )?))
                         .build()
                 }
                 Node::Tabular(node) => DagTaskBuilder::default()

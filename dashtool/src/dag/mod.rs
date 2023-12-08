@@ -2,7 +2,7 @@ use std::{collections::HashMap, fs};
 
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 use serde::{Deserialize, Serialize};
-use target_iceberg_nessie::config::Config as SingerConfig;
+use serde_json::Value as JsonValue;
 
 use crate::error::Error;
 
@@ -42,12 +42,12 @@ impl Tabular {
 pub struct Singer {
     pub(crate) identifier: String,
     pub(crate) branch: String,
-    pub(crate) tap: String,
-    pub(crate) target: SingerConfig,
+    pub(crate) tap: JsonValue,
+    pub(crate) target: JsonValue,
 }
 
 impl Singer {
-    pub(crate) fn new(identifier: &str, tap: String, target: SingerConfig, branch: &str) -> Self {
+    pub(crate) fn new(identifier: &str, tap: JsonValue, target: JsonValue, branch: &str) -> Self {
         Self {
             identifier: identifier.to_owned(),
             branch: branch.to_owned(),
@@ -79,7 +79,10 @@ impl Dag {
         let identifier = match &node {
             Node::Singer(singer) => {
                 let identifier = singer.identifier.clone();
-                for (_, stream) in &singer.target.streams {
+                let streams: HashMap<String, String> =
+                    serde_json::from_value(singer.target["streams"].clone())
+                        .expect("target.json must contain streams field.");
+                for (_, stream) in &streams {
                     self.singers.insert(stream.clone(), identifier.clone());
                 }
                 identifier

@@ -11,10 +11,14 @@ pub(crate) fn singer_template(
     plugin: &dyn Plugin,
 ) -> Result<IoArgoprojWorkflowV1alpha1Template, Error> {
     let template = TemplateBuilder::default()
-        .name(Some(node.target.image.clone()))
+        .name(Some(serde_json::from_value::<String>(
+            node.target["image"].clone(),
+        )?))
         .container(Some(
             ContainerBuilder::default()
-                .image(node.target.image.clone())
+                .image(serde_json::from_value::<String>(
+                    node.target["image"].clone(),
+                )?)
                 .volume_mounts(vec![VolumeMountBuilder::default()
                     .name("config".to_string())
                     .mount_path("/tmp/config".to_string())

@@ -3,7 +3,7 @@ use std::{fs, sync::Arc};
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
 use async_trait::async_trait;
 use iceberg_catalog_sql::SqlCatalogList;
-use iceberg_rust::catalog::{Catalog, CatalogList};
+use iceberg_rust::catalog::CatalogList;
 use object_store::{aws::AmazonS3Builder, ObjectStore};
 use serde::{Deserialize, Serialize};
 
@@ -61,18 +61,10 @@ impl SqlPlugin {
 
 #[async_trait]
 impl Plugin for SqlPlugin {
-    async fn catalog(
-        &self,
-        catalog_name: &str,
-        _table_namespace: &str,
-        _table_name: &str,
-    ) -> Result<Arc<dyn Catalog>, Error> {
-        self.catalog_list
-            .catalog(catalog_name)
-            .await
-            .ok_or(Error::Text(format!("Catalog {} not found", catalog_name)))
+    async fn catalog_list(&self) -> Result<Arc<dyn CatalogList>, Error> {
+        Ok(self.catalog_list.clone())
     }
-    fn bucket(&self) -> &str {
+    fn bucket(&self, catalog_name: &str) -> &str {
         &self.config.bucket
     }
     fn init_containters(

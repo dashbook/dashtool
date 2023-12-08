@@ -30,7 +30,7 @@ anyhow = "1"
 datafusion-common = "33.0.0"
 petgraph = { version = "0.6", features = ["serde-1"] }
 arrow-schema = "48.0.1"
-target-iceberg-nessie = { git = "https://github.com/dashbook/target-iceberg-nessie.git" }
+target-iceberg = { git = "https://github.com/dashbook/target-iceberg.git" }
 serde_yaml = "0.9.25"
 async-trait = "0.1"
 derive-getters = "0.3.0"

@@ -3,7 +3,6 @@ use std::{ffi::OsStr, fs, path::Path};
 use anyhow::anyhow;
 use git2::{Delta, Diff};
 use iceberg_rust::sql::find_relations;
-use target_iceberg_nessie::config::Config as SingerConfig;
 
 use crate::{
     dag::{identifier::FullIdentifier, Dag, Node, Singer, Tabular},
@@ -46,14 +45,16 @@ pub(super) fn update_dag<'repo>(
             "target.json must be inside a subfolder."
         )))?;
         let tap_path = parent_path.join("tap.json");
-        let tap_json = fs::read_to_string(&tap_path)?;
-        let target_json = fs::read_to_string(path)?;
-        let target: SingerConfig = serde_json::from_str(&target_json)?;
+        let tap_json = serde_json::from_str(&fs::read_to_string(&tap_path)?)?;
+        let target_json = serde_json::from_str(&fs::read_to_string(path)?)?;
         let identifier = parent_path
             .to_str()
             .ok_or(Error::Anyhow(anyhow!("Failed to convert path to string.")))?;
         dag.add_node(Node::Singer(Singer::new(
-            identifier, tap_json, target, branch,
+            identifier,
+            tap_json,
+            target_json,
+            branch,
         )));
     }
 
@@ -183,7 +184,7 @@ mod tests {
         };
 
         assert_eq!(
-            singer.target.image,
+            singer.target["image"],
             "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg"
         )
     }
@@ -404,7 +405,7 @@ mod tests {
         };
 
         assert_eq!(
-            singer.target.image,
+            singer.target["image"],
             "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg"
         )
     }
