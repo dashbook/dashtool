@@ -12,7 +12,7 @@ pub mod sql;
 #[async_trait]
 pub trait Plugin {
     async fn catalog_list(&self) -> Result<Arc<dyn CatalogList>, Error>;
-    fn bucket(&self, catalog_name: &str) -> &str;
+    fn bucket(&self, catalog_name: &str) -> Option<&str>;
     fn init_containters(
         &self,
     ) -> Result<Option<Vec<IoArgoprojWorkflowV1alpha1UserContainer>>, Error>;

@@ -64,8 +64,8 @@ impl Plugin for SqlPlugin {
     async fn catalog_list(&self) -> Result<Arc<dyn CatalogList>, Error> {
         Ok(self.catalog_list.clone())
     }
-    fn bucket(&self, catalog_name: &str) -> &str {
-        &self.config.bucket
+    fn bucket(&self, _catalog_name: &str) -> Option<&str> {
+        Some(&self.config.bucket)
     }
     fn init_containters(
         &self,

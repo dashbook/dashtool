@@ -1,4 +1,4 @@
-use std::{fs, sync::Arc};
+use std::{collections::HashMap, fs, sync::Arc};
 
 use argo_workflow::schema::{
     ConfigMapVolumeSourceBuilder, IoArgoprojWorkflowV1alpha1UserContainer,
@@ -21,7 +21,7 @@ mod openid;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
-    pub bucket: String,
+    pub buckets: HashMap<String, String>,
     pub issuer: Option<String>,
     pub client_id: Option<String>,
 }
@@ -61,8 +61,8 @@ impl Plugin for DashbookPlugin {
     async fn catalog_list(&self) -> Result<Arc<dyn CatalogList>, Error> {
         Ok(self.catalog_list.clone())
     }
-    fn bucket(&self, catalog_name: &str) -> &str {
-        &self.config.bucket
+    fn bucket(&self, catalog_name: &str) -> Option<&str> {
+        self.config.buckets.get(catalog_name).map(|x| x.as_str())
     }
     fn init_containters(
         &self,

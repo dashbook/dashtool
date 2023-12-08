@@ -137,6 +137,10 @@ pub(super) async fn build_dag<'repo>(
                                 };
                                 let base_path = plugin
                                     .bucket(&catalog_name)
+                                    .ok_or(IcebergError::NotFound(
+                                        "Bucket for catalog".to_owned(),
+                                        catalog_name.to_string(),
+                                    ))?
                                     .trim_end_matches("/")
                                     .to_string()
                                     + path
