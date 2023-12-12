@@ -126,11 +126,7 @@ mod tests {
                 r#"
                 {
                     "image": "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg",
-                    "streams": {"inventory_orders": "bronze.inventory.orders"},
-                    "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
-                    "bucket": "s3://example-postgres/",
-                    "access_token": "$ACCESS_TOKEN",
-                    "id_token": "$ID_TOKEN"
+                    "streams": {"inventory_orders": "bronze.inventory.orders"}
                 }
                 "#
                 .as_bytes(),

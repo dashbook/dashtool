@@ -336,8 +336,6 @@ mod tests {
                 r#"
                 {
 	               "url": "sqlite://",
-	               "region": "null",
-	               "bucket": "null",
 	               "secretName": "null"
                 }
                 "#
@@ -565,12 +563,16 @@ mod tests {
 
         builder.build().await.expect("Failed to create table.");
 
-        let config = Config {
-            url: "sqlite://".to_owned(),
-            region: "".to_owned(),
-            bucket: "".to_owned(),
-            secret_name: "".to_owned(),
-        };
+        let config: Config = serde_json::from_str(
+            r#"
+                {
+                    "url": "sqlite://",
+                    "bucket": "test",
+                    "secretName": ""
+                }
+                "#,
+        )
+        .expect("Failed to parse config");
 
         let plugin = Arc::new(
             SqlPlugin::new_with_catalog(config, catalog_list).expect("Failed to create plugin"),
