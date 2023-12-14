@@ -26,6 +26,7 @@ pub struct Config {
     pub client_id: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct DashbookPlugin {
     config: Config,
     catalog_list: Arc<dyn CatalogList>,

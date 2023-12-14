@@ -22,6 +22,7 @@ pub struct Config {
     pub secret_name: String,
 }
 
+#[derive(Debug)]
 pub struct SqlPlugin {
     config: Config,
     catalog_list: Arc<dyn CatalogList>,
