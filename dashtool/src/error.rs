@@ -71,6 +71,12 @@ pub enum Error {
     #[error(transparent)]
     ArgoUserContainer(#[from] argo_workflow::schema::UserContainerBuilderError),
     #[error(transparent)]
+    ArgoEnvVar(#[from] argo_workflow::schema::EnvVarBuilderError),
+    #[error(transparent)]
+    ArgoEnvVarSource(#[from] argo_workflow::schema::EnvVarSourceBuilderError),
+    #[error(transparent)]
+    ArgoSecretKeySelector(#[from] argo_workflow::schema::SecretKeySelectorBuilderError),
+    #[error(transparent)]
     ArgoCronWorkflowSpec(#[from] argo_workflow::schema::CronWorkflowSpecBuilderError),
     #[error(transparent)]
     ArgoCronWorkflow(#[from] argo_workflow::schema::CronWorkflowBuilderError),

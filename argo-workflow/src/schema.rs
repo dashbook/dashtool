@@ -8648,8 +8648,12 @@ impl From<&IoK8sApiCoreV1EnvFromSource> for IoK8sApiCoreV1EnvFromSource {
         value.clone()
     }
 }
+
+pub use IoK8sApiCoreV1EnvVarBuilder as EnvVarBuilder;
+pub use IoK8sApiCoreV1EnvVarBuilderError as EnvVarBuilderError;
+
 #[doc = "EnvVar represents an environment variable present in a Container."]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Builder, Default)]
 pub struct IoK8sApiCoreV1EnvVar {
     #[doc = "Name of the environment variable. Must be a C_IDENTIFIER."]
     pub name: String,
@@ -8665,8 +8669,11 @@ impl From<&IoK8sApiCoreV1EnvVar> for IoK8sApiCoreV1EnvVar {
         value.clone()
     }
 }
+pub use IoK8sApiCoreV1EnvVarSourceBuilder as EnvVarSourceBuilder;
+pub use IoK8sApiCoreV1EnvVarSourceBuilderError as EnvVarSourceBuilderError;
+
 #[doc = "EnvVarSource represents a source for the value of an EnvVar."]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Builder, Default)]
 pub struct IoK8sApiCoreV1EnvVarSource {
     #[doc = "Selects a key of a ConfigMap."]
     #[serde(
@@ -10262,8 +10269,12 @@ impl From<&IoK8sApiCoreV1SecretEnvSource> for IoK8sApiCoreV1SecretEnvSource {
         value.clone()
     }
 }
+
+pub use IoK8sApiCoreV1SecretKeySelectorBuilder as SecretKeySelectorBuilder;
+pub use IoK8sApiCoreV1SecretKeySelectorBuilderError as SecretKeySelectorBuilderError;
+
 #[doc = "SecretKeySelector selects a key of a Secret."]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Builder, Default)]
 pub struct IoK8sApiCoreV1SecretKeySelector {
     #[doc = "The key of the secret to select from.  Must be a valid secret key."]
     pub key: String,

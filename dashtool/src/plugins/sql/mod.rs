@@ -1,4 +1,8 @@
-use std::{fs, sync::Arc};
+use argo_workflow::schema::{
+    EnvVarBuilder, EnvVarSourceBuilder, SecretKeySelectorBuilder, UserContainerBuilder,
+    VolumeMountBuilder,
+};
+use std::{collections::HashMap, fs, sync::Arc};
 
 use anyhow::anyhow;
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
@@ -19,7 +23,7 @@ pub struct Config {
     pub object_store: ObjectStoreConfig,
     pub url: String,
     pub bucket: Option<String>,
-    pub secret_name: String,
+    pub secrets: HashMap<String, HashMap<String, String>>,
 }
 
 #[derive(Debug)]
@@ -80,13 +84,53 @@ impl Plugin for SqlPlugin {
     async fn catalog_list(&self) -> Result<Arc<dyn CatalogList>, Error> {
         Ok(self.catalog_list.clone())
     }
+
     fn bucket(&self, _catalog_name: &str) -> Option<&str> {
         self.config.bucket.as_deref()
     }
+
     fn init_containters(
         &self,
     ) -> Result<Option<Vec<IoArgoprojWorkflowV1alpha1UserContainer>>, Error> {
-        Ok(None)
+        let mut builder = UserContainerBuilder::default();
+        builder
+            .name("envsubst".to_string())
+            .image(Some("dibi/envsubst".to_string()))
+            .volume_mounts(vec![
+                VolumeMountBuilder::default()
+                    .name("config_template".to_string())
+                    .mount_path("/workdir".to_string())
+                    .build()?,
+                VolumeMountBuilder::default()
+                    .name("config".to_string())
+                    .mount_path("/processed".to_string())
+                    .build()?,
+            ]);
+
+        for (secret, map) in &self.config.secrets {
+            for (key, value) in map {
+                builder.env(vec![EnvVarBuilder::default()
+                    .name(key.clone())
+                    .value_from(Some(
+                        EnvVarSourceBuilder::default()
+                            .secret_key_ref(Some(
+                                SecretKeySelectorBuilder::default()
+                                    .name(Some(secret.trim_start_matches('$').to_owned()))
+                                    .key(value.clone())
+                                    .optional(None)
+                                    .build()?,
+                            ))
+                            .config_map_key_ref(None)
+                            .field_ref(None)
+                            .resource_field_ref(None)
+                            .build()?,
+                    ))
+                    .value(None)
+                    .build()?]);
+            }
+        }
+
+        Ok(Some(vec![builder.build()?]))
     }
     fn volumes(&self) -> Result<Option<Vec<IoK8sApiCoreV1Volume>>, Error> {
         Ok(None)

@@ -10,38 +10,39 @@ pub(crate) fn singer_template(
     node: &Singer,
     plugin: &dyn Plugin,
 ) -> Result<IoArgoprojWorkflowV1alpha1Template, Error> {
-    let template = TemplateBuilder::default()
-        .name(Some(serde_json::from_value::<String>(
-            node.target["image"].clone(),
-        )?))
-        .container(Some(
-            ContainerBuilder::default()
-                .image(serde_json::from_value::<String>(
-                    node.target["image"].clone(),
-                )?)
-                .volume_mounts(vec![VolumeMountBuilder::default()
-                    .name("config".to_string())
-                    .mount_path("/tmp/config".to_string())
-                    .build()?])
-                .build()?,
-        ))
-        .init_containers(plugin.init_containters()?.unwrap_or(vec![
-            UserContainerBuilder::default()
-                .name("envsubst".to_string())
-                .image(Some("dibi/envsubst".to_string()))
-                .volume_mounts(vec![
-                    VolumeMountBuilder::default()
-                        .name("config_template".to_string())
-                        .mount_path("/workdir".to_string())
-                        .build()?,
-                    VolumeMountBuilder::default()
+    let template =
+        TemplateBuilder::default()
+            .name(Some(serde_json::from_value::<String>(
+                node.target["image"].clone(),
+            )?))
+            .container(Some(
+                ContainerBuilder::default()
+                    .image(serde_json::from_value::<String>(
+                        node.target["image"].clone(),
+                    )?)
+                    .volume_mounts(vec![VolumeMountBuilder::default()
                         .name("config".to_string())
-                        .mount_path("/processed".to_string())
-                        .build()?,
-                ])
-                .build()?,
-        ]))
-        .volumes(plugin.volumes()?.unwrap_or(vec![
+                        .mount_path("/tmp/config".to_string())
+                        .build()?])
+                    .build()?,
+            ))
+            .init_containers(plugin.init_containters()?.unwrap_or(
+                vec![UserContainerBuilder::default()
+                    .name("envsubst".to_string())
+                    .image(Some("dibi/envsubst".to_string()))
+                    .volume_mounts(vec![
+                        VolumeMountBuilder::default()
+                            .name("config_template".to_string())
+                            .mount_path("/workdir".to_string())
+                            .build()?,
+                        VolumeMountBuilder::default()
+                            .name("config".to_string())
+                            .mount_path("/processed".to_string())
+                            .build()?,
+                    ])
+                    .build()?],
+            ))
+            .volumes(plugin.volumes()?.unwrap_or(vec![
             VolumeBuilder::default()
                 .name("config".to_string())
                 .empty_dir(Some(IoK8sApiCoreV1EmptyDirVolumeSource::default()))
@@ -51,8 +52,8 @@ pub(crate) fn singer_template(
                 .config_map(Some(ConfigMapVolumeSourceBuilder::default().build()?))
                 .build()?,
         ]))
-        .build()
-        .unwrap();
+            .build()
+            .unwrap();
     Ok(template)
 }
 
