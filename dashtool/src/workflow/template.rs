@@ -61,10 +61,10 @@ pub(crate) fn iceberg_template(
     plugin: &dyn Plugin,
 ) -> Result<IoArgoprojWorkflowV1alpha1Template, Error> {
     let template = TemplateBuilder::default()
-        .name(Some("iceberg".to_string()))
+        .name(Some("refresh".to_string()))
         .container(Some(
             ContainerBuilder::default()
-                .image("ghcr.io/dashbook/refresh".to_string())
+                .image(plugin.refresh_image().to_owned())
                 .volume_mounts(vec![VolumeMountBuilder::default()
                     .name("config".to_string())
                     .mount_path("/tmp/config".to_string())

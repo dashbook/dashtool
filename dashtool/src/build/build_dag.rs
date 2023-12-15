@@ -336,7 +336,7 @@ mod tests {
                 r#"
                 {
 	               "url": "sqlite://",
-	               "secretName": "null"
+	               "secrets": {} 
                 }
                 "#
                 .as_bytes(),
@@ -568,7 +568,7 @@ mod tests {
                 {
                     "url": "sqlite://",
                     "bucket": "test",
-                    "secretName": ""
+                    "secrets": {} 
                 }
                 "#,
         )

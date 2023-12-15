@@ -89,6 +89,10 @@ impl Plugin for SqlPlugin {
         self.config.bucket.as_deref()
     }
 
+    fn refresh_image(&self) -> &str {
+        "ghcr.io/dashbook/refresh-iceberg-datafusion:sql"
+    }
+
     fn init_containters(
         &self,
     ) -> Result<Option<Vec<IoArgoprojWorkflowV1alpha1UserContainer>>, Error> {

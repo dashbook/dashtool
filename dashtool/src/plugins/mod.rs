@@ -14,6 +14,7 @@ pub mod sql;
 pub trait Plugin: Debug {
     async fn catalog_list(&self) -> Result<Arc<dyn CatalogList>, Error>;
     fn bucket(&self, catalog_name: &str) -> Option<&str>;
+    fn refresh_image(&self) -> &str;
     fn init_containters(
         &self,
     ) -> Result<Option<Vec<IoArgoprojWorkflowV1alpha1UserContainer>>, Error>;

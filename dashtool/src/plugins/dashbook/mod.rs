@@ -62,9 +62,15 @@ impl Plugin for DashbookPlugin {
     async fn catalog_list(&self) -> Result<Arc<dyn CatalogList>, Error> {
         Ok(self.catalog_list.clone())
     }
+
     fn bucket(&self, catalog_name: &str) -> Option<&str> {
         self.config.buckets.get(catalog_name).map(|x| x.as_str())
     }
+
+    fn refresh_image(&self) -> &str {
+        "ghcr.io/dashbook/refresh-iceberg-datafusion:dashbook"
+    }
+
     fn init_containters(
         &self,
     ) -> Result<Option<Vec<IoArgoprojWorkflowV1alpha1UserContainer>>, Error> {
