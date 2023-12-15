@@ -79,6 +79,8 @@ pub enum Error {
     #[error(transparent)]
     ArgoArguments(#[from] argo_workflow::schema::ArgumentsBuilderError),
     #[error(transparent)]
+    ArgoObjectMeta(#[from] argo_workflow::schema::ObjectMetaBuilderError),
+    #[error(transparent)]
     ArgoEnvVarSource(#[from] argo_workflow::schema::EnvVarSourceBuilderError),
     #[error(transparent)]
     ArgoSecretKeySelector(#[from] argo_workflow::schema::SecretKeySelectorBuilderError),

@@ -161,7 +161,7 @@ pub(super) async fn build_dag<'repo>(
                         }
 
                         tabular_sender
-                            .send((identifier.to_string(), relations))
+                            .send((identifier.to_string(), (sql, relations)))
                             .await?;
                     }
                     Some(false) => {
@@ -195,18 +195,18 @@ pub(super) async fn build_dag<'repo>(
 
     let singers = singer_reciever.collect::<Vec<_>>().await;
 
-    let tabs: HashMap<String, Vec<String>> =
+    let tabs: HashMap<String, (String, Vec<String>)> =
         HashMap::from_iter(tabular_reciever.collect::<Vec<_>>().await);
 
     for singer in singers {
         dag.add_node(singer)
     }
 
-    for node in tabs.keys() {
-        dag.add_node(Node::Tabular(Tabular::new(node, branch)))
+    for (node, (sql, _)) in &tabs {
+        dag.add_node(Node::Tabular(Tabular::new(node, branch, sql)))
     }
 
-    for (node, children) in tabs {
+    for (node, (_, children)) in tabs {
         for child in children {
             dag.add_edge(&node, &child)?
         }

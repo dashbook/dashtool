@@ -27,13 +27,15 @@ impl Node {
 pub struct Tabular {
     pub(crate) identifier: String,
     pub(crate) branch: String,
+    pub(crate) query: String,
 }
 
 impl Tabular {
-    pub(crate) fn new(identifier: &str, branch: &str) -> Self {
+    pub(crate) fn new(identifier: &str, branch: &str, query: &String) -> Self {
         Self {
             identifier: identifier.to_owned(),
             branch: branch.to_owned(),
+            query: query.to_owned(),
         }
     }
 }

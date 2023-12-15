@@ -65,7 +65,7 @@ pub(super) fn update_dag<'repo>(
 
         let identifier = FullIdentifier::parse_path(&path)?.to_string();
 
-        dag.add_node(Node::Tabular(Tabular::new(&identifier, branch)));
+        dag.add_node(Node::Tabular(Tabular::new(&identifier, branch, &sql)));
 
         for child in children {
             dag.add_edge(&identifier, &child)?
