@@ -1,9 +1,9 @@
 use crate::{dag::Singer, error::Error, plugins::Plugin};
 
 use argo_workflow::schema::{
-    ConfigMapVolumeSourceBuilder, ContainerBuilder, IoArgoprojWorkflowV1alpha1Template,
-    IoK8sApiCoreV1EmptyDirVolumeSource, TemplateBuilder, UserContainerBuilder, VolumeBuilder,
-    VolumeMountBuilder,
+    ConfigMapVolumeSourceBuilder, ContainerBuilder, InputsBuilder,
+    IoArgoprojWorkflowV1alpha1Template, IoK8sApiCoreV1EmptyDirVolumeSource, ParameterBuilder,
+    TemplateBuilder, UserContainerBuilder, VolumeBuilder, VolumeMountBuilder,
 };
 
 pub(crate) fn singer_template(
@@ -15,13 +15,21 @@ pub(crate) fn singer_template(
             .name(Some(serde_json::from_value::<String>(
                 node.target["image"].clone(),
             )?))
+            .inputs(Some(
+                InputsBuilder::default()
+                    .parameters(vec![{
+                        let mut builder: ParameterBuilder = Default::default();
+                        builder.name("identifier".to_string()).build()?
+                    }])
+                    .build()?,
+            ))
             .container(Some(
                 ContainerBuilder::default()
                     .image(serde_json::from_value::<String>(
                         node.target["image"].clone(),
                     )?)
                     .volume_mounts(vec![VolumeMountBuilder::default()
-                        .name("config".to_string())
+                        .name("{{inputs.parameters.identifier}}-config".to_string())
                         .mount_path("/tmp/config".to_string())
                         .build()?])
                     .build()?,
@@ -32,11 +40,11 @@ pub(crate) fn singer_template(
                     .image(Some("dibi/envsubst".to_string()))
                     .volume_mounts(vec![
                         VolumeMountBuilder::default()
-                            .name("config_template".to_string())
+                            .name("{{inputs.parameters.identifier}}-config-template".to_string())
                             .mount_path("/workdir".to_string())
                             .build()?,
                         VolumeMountBuilder::default()
-                            .name("config".to_string())
+                            .name("{{inputs.parameters.identifier}}-config".to_string())
                             .mount_path("/processed".to_string())
                             .build()?,
                     ])
@@ -44,11 +52,11 @@ pub(crate) fn singer_template(
             ))
             .volumes(plugin.volumes()?.unwrap_or(vec![
             VolumeBuilder::default()
-                .name("config".to_string())
+                .name("{{inputs.parameters.identifier}}-config".to_string())
                 .empty_dir(Some(IoK8sApiCoreV1EmptyDirVolumeSource::default()))
                 .build()?,
             VolumeBuilder::default()
-                .name("config_template".to_string())
+                .name("{{inputs.parameters.identifier}}-config-template".to_string())
                 .config_map(Some(ConfigMapVolumeSourceBuilder::default().build()?))
                 .build()?,
         ]))
@@ -62,11 +70,19 @@ pub(crate) fn iceberg_template(
 ) -> Result<IoArgoprojWorkflowV1alpha1Template, Error> {
     let template = TemplateBuilder::default()
         .name(Some("refresh".to_string()))
+        .inputs(Some(
+            InputsBuilder::default()
+                .parameters(vec![{
+                    let mut builder: ParameterBuilder = Default::default();
+                    builder.name("identifier".to_string()).build()?
+                }])
+                .build()?,
+        ))
         .container(Some(
             ContainerBuilder::default()
                 .image(plugin.refresh_image().to_owned())
                 .volume_mounts(vec![VolumeMountBuilder::default()
-                    .name("config".to_string())
+                    .name("{{inputs.parameters.identifier}}-config".to_string())
                     .mount_path("/tmp/config".to_string())
                     .build()?])
                 .build()?,
@@ -77,11 +93,11 @@ pub(crate) fn iceberg_template(
                 .image(Some("dibi/envsubst".to_string()))
                 .volume_mounts(vec![
                     VolumeMountBuilder::default()
-                        .name("config_template".to_string())
+                        .name("{{inputs.parameters.identifier}}-config-template".to_string())
                         .mount_path("/workdir".to_string())
                         .build()?,
                     VolumeMountBuilder::default()
-                        .name("config".to_string())
+                        .name("{{inputs.parameters.identifier}}-config".to_string())
                         .mount_path("/processed".to_string())
                         .build()?,
                 ])
@@ -89,11 +105,11 @@ pub(crate) fn iceberg_template(
         ]))
         .volumes(plugin.volumes()?.unwrap_or(vec![
             VolumeBuilder::default()
-                .name("config".to_string())
+                .name("{{inputs.parameters.identifier}}-config".to_string())
                 .empty_dir(Some(IoK8sApiCoreV1EmptyDirVolumeSource::default()))
                 .build()?,
             VolumeBuilder::default()
-                .name("config_template".to_string())
+                .name("{{inputs.parameters.identifier}}-config-template".to_string())
                 .config_map(Some(ConfigMapVolumeSourceBuilder::default().build()?))
                 .build()?,
         ]))

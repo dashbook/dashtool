@@ -1,8 +1,9 @@
 use std::{collections::HashMap, fs, sync::Arc};
 
 use argo_workflow::schema::{
-    CronWorkflowBuilder, CronWorkflowSpecBuilder, DagTaskBuilder, DagTemplateBuilder,
-    IoArgoprojWorkflowV1alpha1Template, TemplateBuilder, WorkflowSpecBuilder,
+    ArgumentsBuilder, CronWorkflowBuilder, CronWorkflowSpecBuilder, DagTaskBuilder,
+    DagTemplateBuilder, IoArgoprojWorkflowV1alpha1Template, ParameterBuilder, TemplateBuilder,
+    WorkflowSpecBuilder,
 };
 use git2::Repository;
 use petgraph::Direction;
@@ -42,16 +43,40 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                             node.target["image"].clone(),
                         )?)
                         .or_insert_with(|| singer_template(&node, &*plugin).unwrap());
+
                     DagTaskBuilder::default()
-                        .name(node.identifier.clone())
+                        .name(node.identifier.clone().replace('/', "-"))
                         .template(Some(serde_json::from_value::<String>(
                             node.target["image"].clone(),
                         )?))
+                        .arguments(Some(
+                            ArgumentsBuilder::default()
+                                .parameters(vec![{
+                                    let mut builder: ParameterBuilder = Default::default();
+                                    builder
+                                        .name("identifier".to_owned())
+                                        .value(Some(node.identifier.clone().replace('/', "-")))
+                                        .build()?
+                                }])
+                                .build()?,
+                        ))
                         .build()
                 }
+
                 Node::Tabular(node) => DagTaskBuilder::default()
-                    .name(node.identifier.clone())
+                    .name(node.identifier.clone().replace('/', "-"))
                     .template(Some("refresh".to_string()))
+                    .arguments(Some(
+                        ArgumentsBuilder::default()
+                            .parameters(vec![{
+                                let mut builder: ParameterBuilder = Default::default();
+                                builder
+                                    .name("identifier".to_owned())
+                                    .value(Some(node.identifier.clone().replace('/', "-")))
+                                    .build()?
+                            }])
+                            .build()?,
+                    ))
                     .dependencies(
                         dag.dag
                             .neighbors_directed(index, Direction::Incoming)
@@ -61,6 +86,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                     )
                     .build(),
             }?;
+
             Ok::<_, Error>(task)
         })
         .collect::<Result<Vec<_>, Error>>()?;

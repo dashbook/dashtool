@@ -102,11 +102,11 @@ impl Plugin for SqlPlugin {
             .image(Some("dibi/envsubst".to_string()))
             .volume_mounts(vec![
                 VolumeMountBuilder::default()
-                    .name("config_template".to_string())
+                    .name("{{inputs.parameters.identifier}}-config-template".to_string())
                     .mount_path("/workdir".to_string())
                     .build()?,
                 VolumeMountBuilder::default()
-                    .name("config".to_string())
+                    .name("{{inputs.parameters.identifier}}-config".to_string())
                     .mount_path("/processed".to_string())
                     .build()?,
             ]);

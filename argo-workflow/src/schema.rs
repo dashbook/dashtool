@@ -3054,9 +3054,14 @@ impl From<serde_json::Map<String, serde_json::Value>>
         Self(value)
     }
 }
+
+pub use IoArgoprojWorkflowV1alpha1ArgumentsBuilder as ArgumentsBuilder;
+pub use IoArgoprojWorkflowV1alpha1ArgumentsBuilderError as ArgumentsBuilderError;
+
 #[doc = "Arguments to a template"]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, Builder)]
 pub struct IoArgoprojWorkflowV1alpha1Arguments {
+    #[builder(default)]
     #[doc = "Artifacts is the list of artifacts to pass to the template or workflow"]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub artifacts: Vec<IoArgoprojWorkflowV1alpha1Artifact>,
@@ -4966,9 +4971,13 @@ impl From<&IoArgoprojWorkflowV1alpha1InfoResponse> for IoArgoprojWorkflowV1alpha
         value.clone()
     }
 }
+
+pub use IoArgoprojWorkflowV1alpha1InputsBuilder as InputsBuilder;
+pub use IoArgoprojWorkflowV1alpha1InputsBuilderError as InputsBuilderError;
 #[doc = "Inputs are the mechanism for passing parameters, artifacts, volumes from one template to another"]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, Builder)]
 pub struct IoArgoprojWorkflowV1alpha1Inputs {
+    #[builder(default)]
     #[doc = "Artifact are a list of artifacts passed as inputs"]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub artifacts: Vec<IoArgoprojWorkflowV1alpha1Artifact>,
@@ -5651,18 +5660,25 @@ impl From<Vec<IoArgoprojWorkflowV1alpha1WorkflowStep>> for IoArgoprojWorkflowV1a
         Self(value)
     }
 }
+
+pub use IoArgoprojWorkflowV1alpha1ParameterBuilder as ParameterBuilder;
+pub use IoArgoprojWorkflowV1alpha1ParameterBuilderError as ParameterBuilderError;
 #[doc = "Parameter indicate a passed string parameter to a service template with an optional default value"]
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, Builder)]
 pub struct IoArgoprojWorkflowV1alpha1Parameter {
+    #[builder(default)]
     #[doc = "Default is the default value to use for an input parameter if a value was not supplied"]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default: Option<String>,
+    #[builder(default)]
     #[doc = "Description is the parameter description"]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[builder(default)]
     #[doc = "Enum holds a list of string values to choose from, for the actual value of the parameter"]
     #[serde(rename = "enum", default, skip_serializing_if = "Vec::is_empty")]
     pub enum_: Vec<String>,
+    #[builder(default)]
     #[doc = "GlobalName exports an output parameter to the global scope, making it available as '{{io.argoproj.workflow.v1alpha1.outputs.parameters.XXXX}} and in workflow.status.outputs.parameters"]
     #[serde(
         rename = "globalName",
@@ -5672,9 +5688,11 @@ pub struct IoArgoprojWorkflowV1alpha1Parameter {
     pub global_name: Option<String>,
     #[doc = "Name is the parameter name"]
     pub name: String,
+    #[builder(default)]
     #[doc = "Value is the literal value to use for the parameter. If specified in the context of an input parameter, the value takes precedence over any passed values"]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub value: Option<String>,
+    #[builder(default)]
     #[doc = "ValueFrom is the source for the output parameter's value"]
     #[serde(rename = "valueFrom", default, skip_serializing_if = "Option::is_none")]
     pub value_from: Option<IoArgoprojWorkflowV1alpha1ValueFrom>,
