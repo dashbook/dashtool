@@ -114,12 +114,12 @@ impl Plugin for SqlPlugin {
         for (secret, map) in &self.config.secrets {
             for (key, value) in map {
                 builder.env(vec![EnvVarBuilder::default()
-                    .name(key.clone())
+                    .name(key.trim_start_matches('$').to_owned())
                     .value_from(Some(
                         EnvVarSourceBuilder::default()
                             .secret_key_ref(Some(
                                 SecretKeySelectorBuilder::default()
-                                    .name(Some(secret.trim_start_matches('$').to_owned()))
+                                    .name(Some(secret.clone()))
                                     .key(value.clone())
                                     .optional(None)
                                     .build()?,
