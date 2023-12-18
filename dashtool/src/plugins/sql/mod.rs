@@ -4,12 +4,11 @@ use argo_workflow::schema::{
 };
 use std::{collections::HashMap, fs, sync::Arc};
 
-use anyhow::anyhow;
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
 use async_trait::async_trait;
 use iceberg_catalog_sql::SqlCatalogList;
 use iceberg_rust::catalog::CatalogList;
-use object_store::{aws::AmazonS3Builder, local::LocalFileSystem, memory::InMemory, ObjectStore};
+use object_store::{aws::AmazonS3Builder, memory::InMemory, ObjectStore};
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
@@ -21,8 +20,10 @@ use super::{ObjectStoreConfig, Plugin};
 pub struct Config {
     #[serde(flatten)]
     pub object_store: ObjectStoreConfig,
-    pub url: String,
-    pub bucket: Option<String>,
+    pub catalog_url: String,
+    pub bucket: String,
+    /// A nested map that maps a kubernetes secret name to a map from a environement name to the
+    /// key of the secret value in the secret.
     pub secrets: HashMap<String, HashMap<String, String>>,
 }
 
@@ -39,25 +40,16 @@ impl SqlPlugin {
 
         let object_store: Arc<dyn ObjectStore> = match &config.object_store {
             ObjectStoreConfig::Memory => Arc::new(InMemory::new()),
-            ObjectStoreConfig::FileSystem(path) => {
-                Arc::new(LocalFileSystem::new_with_prefix(&path.path)?)
-            }
             ObjectStoreConfig::S3(s3_config) => Arc::new(
-                AmazonS3Builder::new()
-                    .with_region(&s3_config.region)
-                    .with_bucket_name(
-                        config
-                            .bucket
-                            .clone()
-                            .ok_or(Error::Anyhow(anyhow!("No bucket specified.")))?,
-                    )
-                    .with_access_key_id(&s3_config.access_key_id)
-                    .with_secret_access_key(&s3_config.secret_access_key)
+                AmazonS3Builder::from_env()
+                    .with_region(&s3_config.aws_region)
+                    .with_bucket_name(config.bucket.clone())
+                    .with_access_key_id(&s3_config.aws_access_key_id)
                     .build()?,
             ),
         };
 
-        let catalog_list = Arc::new(SqlCatalogList::new(&config.url, object_store).await?);
+        let catalog_list = Arc::new(SqlCatalogList::new(&config.catalog_url, object_store).await?);
 
         Ok(SqlPlugin {
             config,
@@ -85,8 +77,8 @@ impl Plugin for SqlPlugin {
         Ok(self.catalog_list.clone())
     }
 
-    fn bucket(&self, _catalog_name: &str) -> Option<&str> {
-        self.config.bucket.as_deref()
+    fn bucket(&self, _catalog_name: &str) -> &str {
+        &self.config.bucket
     }
 
     fn refresh_image(&self) -> &str {

@@ -136,21 +136,17 @@ pub(super) async fn build_dag<'repo>(
                                     fields,
                                 };
                                 let base_path = plugin
-                                    .bucket(&catalog_name)
-                                    .ok_or(IcebergError::NotFound(
-                                        "Bucket for catalog".to_owned(),
-                                        catalog_name.to_string(),
-                                    ))?
-                                    .trim_end_matches("/")
+                                    .bucket(catalog_name)
+                                    .trim_end_matches('/')
                                     .to_string()
                                     + path
                                         .to_str()
                                         .ok_or(Error::Text("No new file in delta".to_string()))?
-                                        .trim_start_matches("/")
+                                        .trim_start_matches('/')
                                         .trim_end_matches(".sql");
                                 let mut builder = MaterializedViewBuilder::new(
                                     &sql,
-                                    &identifier.identifier()?,
+                                    identifier.identifier()?,
                                     schema,
                                     catalog,
                                 )?;
@@ -335,8 +331,9 @@ mod tests {
             .write_all(
                 r#"
                 {
-	               "url": "sqlite://",
-	               "secrets": {} 
+	               "catalogUrl": "sqlite://",
+	               "secrets": {}, 
+                   "bucket": ""
                 }
                 "#
                 .as_bytes(),
@@ -566,7 +563,7 @@ mod tests {
         let config: Config = serde_json::from_str(
             r#"
                 {
-                    "url": "sqlite://",
+                    "catalogUrl": "sqlite://",
                     "bucket": "test",
                     "secrets": {} 
                 }

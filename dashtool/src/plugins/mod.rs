@@ -13,7 +13,7 @@ pub mod sql;
 #[async_trait]
 pub trait Plugin: Debug {
     async fn catalog_list(&self) -> Result<Arc<dyn CatalogList>, Error>;
-    fn bucket(&self, catalog_name: &str) -> Option<&str>;
+    fn bucket(&self, catalog_name: &str) -> &str;
     fn refresh_image(&self) -> &str;
     fn init_containters(
         &self,
@@ -27,21 +27,17 @@ pub trait Plugin: Debug {
     into = "Option<ObjectStoreConfigSerde>"
 )]
 pub enum ObjectStoreConfig {
-    FileSystem(FileSystemConfig),
     S3(S3Config),
     Memory,
 }
 
+/// Config for the s3 object-store. The secret_access_key is read from the environment variable
+/// AWS_SECRET_ACCESS_KEY
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct S3Config {
-    pub region: String,
-    pub access_key_id: String,
-    pub secret_access_key: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct FileSystemConfig {
-    pub path: String,
+    pub aws_access_key_id: String,
+    pub aws_region: String,
 }
 
 impl From<Option<ObjectStoreConfigSerde>> for ObjectStoreConfig {
@@ -50,7 +46,6 @@ impl From<Option<ObjectStoreConfigSerde>> for ObjectStoreConfig {
             None => ObjectStoreConfig::Memory,
             Some(value) => match value {
                 ObjectStoreConfigSerde::S3(value) => ObjectStoreConfig::S3(value),
-                ObjectStoreConfigSerde::FileSystem(value) => ObjectStoreConfig::FileSystem(value),
             },
         }
     }
@@ -61,7 +56,6 @@ impl From<ObjectStoreConfig> for Option<ObjectStoreConfigSerde> {
         match value {
             ObjectStoreConfig::Memory => None,
             ObjectStoreConfig::S3(value) => Some(ObjectStoreConfigSerde::S3(value)),
-            ObjectStoreConfig::FileSystem(value) => Some(ObjectStoreConfigSerde::FileSystem(value)),
         }
     }
 }
@@ -69,6 +63,5 @@ impl From<ObjectStoreConfig> for Option<ObjectStoreConfigSerde> {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ObjectStoreConfigSerde {
-    FileSystem(FileSystemConfig),
     S3(S3Config),
 }

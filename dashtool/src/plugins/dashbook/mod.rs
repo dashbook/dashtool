@@ -21,6 +21,7 @@ mod openid;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
+    /// A map from catalog_name to bucket
     pub buckets: HashMap<String, String>,
     pub issuer: Option<String>,
     pub client_id: Option<String>,
@@ -63,8 +64,12 @@ impl Plugin for DashbookPlugin {
         Ok(self.catalog_list.clone())
     }
 
-    fn bucket(&self, catalog_name: &str) -> Option<&str> {
-        self.config.buckets.get(catalog_name).map(|x| x.as_str())
+    fn bucket(&self, catalog_name: &str) -> &str {
+        self.config
+            .buckets
+            .get(catalog_name)
+            .map(|x| x.as_str())
+            .unwrap()
     }
 
     fn refresh_image(&self) -> &str {
