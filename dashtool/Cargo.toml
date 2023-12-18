@@ -9,6 +9,7 @@ edition = "2021"
 argo-workflow = { path = "../argo-workflow" }
 clap = { version = "4.4", features = ["derive"] }
 dashbook-catalog = { git = "https://github.com/dashbook/dashbook-catalog.git" }
+dashtool-common = { path = "../dashtool-common/" }
 datafusion-iceberg-sql = { git = "https://github.com/JanKaul/iceberg-rust.git" }
 datafusion-sql = "33.0.0"
 git2 = "0.18"

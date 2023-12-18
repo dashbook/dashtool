@@ -1,6 +1,7 @@
 [workspace]
-members = ["dashtool","argo-workflow"]
+members = ["dashtool", "dashtool-common", "argo-workflow"]
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+

@@ -2,6 +2,7 @@ use argo_workflow::schema::{
     EnvVarBuilder, EnvVarSourceBuilder, SecretKeySelectorBuilder, UserContainerBuilder,
     VolumeMountBuilder,
 };
+use dashtool_common::ObjectStoreConfig;
 use std::{collections::HashMap, fs, sync::Arc};
 
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
@@ -13,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 
-use super::{ObjectStoreConfig, Plugin};
+use super::Plugin;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
