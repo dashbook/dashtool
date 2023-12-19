@@ -104,28 +104,34 @@ impl Plugin for SqlPlugin {
                     .build()?,
             ]);
 
-        for (secret, map) in &self.config.secrets {
-            for (key, value) in map {
-                builder.env(vec![EnvVarBuilder::default()
-                    .name(value.trim_start_matches('$').to_owned())
-                    .value_from(Some(
-                        EnvVarSourceBuilder::default()
-                            .secret_key_ref(Some(
-                                SecretKeySelectorBuilder::default()
-                                    .name(Some(secret.clone()))
-                                    .key(key.clone())
-                                    .optional(None)
+        builder.env(
+            self.config
+                .secrets
+                .iter()
+                .flat_map(|(secret, map)| {
+                    map.iter().map(|(key, value)| {
+                        Ok(EnvVarBuilder::default()
+                            .name(value.trim_start_matches('$').to_owned())
+                            .value_from(Some(
+                                EnvVarSourceBuilder::default()
+                                    .secret_key_ref(Some(
+                                        SecretKeySelectorBuilder::default()
+                                            .name(Some(secret.clone()))
+                                            .key(key.clone())
+                                            .optional(None)
+                                            .build()?,
+                                    ))
+                                    .config_map_key_ref(None)
+                                    .field_ref(None)
+                                    .resource_field_ref(None)
                                     .build()?,
                             ))
-                            .config_map_key_ref(None)
-                            .field_ref(None)
-                            .resource_field_ref(None)
-                            .build()?,
-                    ))
-                    .value(None)
-                    .build()?]);
-            }
-        }
+                            .value(None)
+                            .build()?)
+                    })
+                })
+                .collect::<Result<Vec<_>, Error>>()?,
+        );
 
         Ok(Some(vec![builder.build()?]))
     }
