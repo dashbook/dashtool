@@ -3,7 +3,6 @@ use std::{fmt::Debug, sync::Arc};
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
 use async_trait::async_trait;
 use iceberg_rust::catalog::CatalogList;
-use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 
