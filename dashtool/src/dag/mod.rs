@@ -1,4 +1,7 @@
-use std::{collections::HashMap, fs};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    fs,
+};
 
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 use serde::{Deserialize, Serialize};
@@ -91,9 +94,19 @@ impl Dag {
             }
             Node::Tabular(tab) => tab.identifier.clone(),
         };
-        let idx = self.dag.add_node(node);
-        self.map.insert(identifier, idx);
+
+        match self.map.entry(identifier) {
+            Entry::Vacant(entry) => {
+                let idx = self.dag.add_node(node);
+                entry.insert(idx);
+            }
+            Entry::Occupied(entry) => {
+                let idx = entry.get();
+                self.dag[*idx] = node;
+            }
+        };
     }
+
     pub(crate) fn add_edge(&mut self, a: &str, b: &str) -> Result<(), Error> {
         let a = self
             .map
