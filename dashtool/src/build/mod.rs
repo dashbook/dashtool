@@ -15,7 +15,7 @@ mod build_dag;
 mod update_dag;
 
 pub async fn build(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
-    let state: State = fs::read_to_string(".dashtool/state.json")
+    let mut state: State = fs::read_to_string(".dashtool/state.json")
         .ok()
         .and_then(|x| serde_json::from_str(&x).ok())
         .unwrap_or_default();
@@ -85,6 +85,18 @@ pub async fn build(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
         ".dashtool/dags/".to_string() + &current_branch + ".json",
         json,
     )?;
+
+    if let Some(current_id) = current_id {
+        state.commits.insert(current_branch, current_id);
+    }
+
+    if let Some(main_id) = main_id {
+        state.commits.insert("main".to_owned(), main_id);
+    }
+
+    let state_json = serde_json::to_string(&state)?;
+
+    fs::write(".dashtool/state.json", state_json)?;
 
     Ok(())
 }
