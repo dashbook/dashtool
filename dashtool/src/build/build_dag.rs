@@ -173,6 +173,66 @@ pub(super) async fn build_dag<'repo>(
                         let identifier = parent_path
                             .to_str()
                             .ok_or(Error::Anyhow(anyhow!("Failed to convert path to string.")))?;
+
+                        if let Some(merged_branch) = merged_branch {
+                            let streams = if let JsonValue::Object(object) = &target_json["streams"]
+                            {
+                                Ok(object)
+                            } else {
+                                Err(Error::Text(format!("Streams in config must be an object.")))
+                            }?;
+
+                            for table in streams.values() {
+                                let name = if let JsonValue::String(object) = table {
+                                    Ok(object)
+                                } else {
+                                    Err(Error::Text(format!(
+                                        "Streams in config must be an object."
+                                    )))
+                                }?;
+
+                                let identifier = FullIdentifier::parse(name)?;
+                                let catalog_name = identifier.catalog_name();
+
+                                let catalog = catalog_list.catalog(catalog_name).await.ok_or(
+                                    IcebergError::NotFound(
+                                        format!("Catalog"),
+                                        catalog_name.to_string(),
+                                    ),
+                                )?;
+
+                                let tabular = catalog.load_table(&identifier.identifier()?).await?;
+
+                                let mut table = if let IcebergTabular::Table(table) = tabular {
+                                    Ok(table)
+                                } else {
+                                    Err(Error::Iceberg(IcebergError::Type(
+                                        "Entity".to_string(),
+                                        "not table".to_string(),
+                                    )))
+                                }?;
+                                let snapshot_id = table
+                                    .metadata()
+                                    .current_snapshot(Some(merged_branch))?
+                                    .ok_or(Error::Iceberg(IcebergError::NotFound(
+                                        "Snapshot id".to_string(),
+                                        "branch".to_string() + merged_branch,
+                                    )))?
+                                    .snapshot_id;
+                                table
+                                    .new_transaction(Some(merged_branch))
+                                    .set_ref((
+                                        branch.to_string(),
+                                        Reference {
+                                            snapshot_id,
+                                            retention: Retention::default(),
+                                        },
+                                    ))
+                                    .commit()
+                                    .await?;
+                            }
+                        };
+
                         singer_sender
                             .send(Node::Singer(Singer::new(
                                 identifier,

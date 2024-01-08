@@ -3,6 +3,7 @@ use std::{ffi::OsStr, fs, path::Path};
 use anyhow::anyhow;
 use git2::{Delta, Diff};
 use iceberg_rust::sql::find_relations;
+use serde_json::Value as JsonValue;
 
 use crate::{
     dag::{identifier::FullIdentifier, Dag, Node, Singer, Tabular},
@@ -46,7 +47,8 @@ pub(super) fn update_dag<'repo>(
         )))?;
         let tap_path = parent_path.join("tap.json");
         let tap_json = serde_json::from_str(&fs::read_to_string(&tap_path)?)?;
-        let target_json = serde_json::from_str(&fs::read_to_string(path)?)?;
+        let mut target_json: JsonValue = serde_json::from_str(&fs::read_to_string(path)?)?;
+        target_json["branch"] = branch.to_string().into();
         let identifier = parent_path
             .to_str()
             .ok_or(Error::Anyhow(anyhow!("Failed to convert path to string.")))?;
