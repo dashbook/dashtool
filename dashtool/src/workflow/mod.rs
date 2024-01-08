@@ -52,8 +52,13 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                         .or_insert_with(|| singer_template(&node, &*plugin).unwrap());
 
                     let mut config_map = ConfigMap::default();
-                    config_map.metadata.name =
-                        Some(node.identifier.replace('/', "-").to_owned() + "-config-template");
+                    config_map.metadata.name = Some(
+                        node.identifier
+                            .replace(['/', '.'], "-")
+                            .to_lowercase()
+                            .to_owned()
+                            + "-config-template",
+                    );
                     config_map.data = Some(BTreeMap::from_iter(vec![
                         ("tap.json".to_owned(), serde_json::to_string(&node.tap)?),
                         (
@@ -61,10 +66,21 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                             serde_json::to_string(&node.target)?,
                         ),
                     ]));
-                    config_maps.insert(node.identifier.replace('/', "-").clone(), config_map);
+                    config_maps.insert(
+                        node.identifier
+                            .replace(['/', '.'], "-")
+                            .to_lowercase()
+                            .clone(),
+                        config_map,
+                    );
 
                     DagTaskBuilder::default()
-                        .name(node.identifier.clone().replace('/', "-"))
+                        .name(
+                            node.identifier
+                                .clone()
+                                .replace(['/', '.'], "-")
+                                .to_lowercase(),
+                        )
                         .template(Some(
                             serde_json::from_value::<String>(node.target["image"].clone())?
                                 .replace(['/', ':', '.'], "-"),
@@ -75,7 +91,12 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                                     let mut builder: ParameterBuilder = Default::default();
                                     builder
                                         .name("identifier".to_owned())
-                                        .value(Some(node.identifier.clone().replace('/', "-")))
+                                        .value(Some(
+                                            node.identifier
+                                                .clone()
+                                                .replace(['/', '.'], "-")
+                                                .to_lowercase(),
+                                        ))
                                         .build()?
                                 }])
                                 .build()?,
@@ -85,16 +106,32 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
 
                 Node::Tabular(node) => {
                     let mut config_map = ConfigMap::default();
-                    config_map.metadata.name =
-                        Some(node.identifier.replace('/', "-").to_owned() + "-config-template");
+                    config_map.metadata.name = Some(
+                        node.identifier
+                            .replace(['/', '.'], "-")
+                            .to_lowercase()
+                            .to_owned()
+                            + "-config-template",
+                    );
                     config_map.data = Some(BTreeMap::from_iter(vec![(
                         "query.sql".to_owned(),
                         serde_json::to_string(&node.query)?,
                     )]));
-                    config_maps.insert(node.identifier.replace('/', "-").clone(), config_map);
+                    config_maps.insert(
+                        node.identifier
+                            .replace(['/', '.'], "-")
+                            .to_lowercase()
+                            .clone(),
+                        config_map,
+                    );
 
                     DagTaskBuilder::default()
-                        .name(node.identifier.clone().replace('/', "-"))
+                        .name(
+                            node.identifier
+                                .clone()
+                                .replace(['/', '.'], "-")
+                                .to_lowercase(),
+                        )
                         .template(Some("refresh".to_string()))
                         .arguments(Some(
                             ArgumentsBuilder::default()
@@ -102,7 +139,12 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                                     let mut builder: ParameterBuilder = Default::default();
                                     builder
                                         .name("identifier".to_owned())
-                                        .value(Some(node.identifier.clone().replace('/', "-")))
+                                        .value(Some(
+                                            node.identifier
+                                                .clone()
+                                                .replace(['/', '.'], "-")
+                                                .to_lowercase(),
+                                        ))
                                         .build()?
                                 }])
                                 .build()?,
@@ -111,7 +153,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                             dag.dag
                                 .neighbors_directed(index, Direction::Incoming)
                                 .into_iter()
-                                .map(|x| dag.dag[x].identifier().to_owned())
+                                .map(|x| dag.dag[x].identifier().to_lowercase().to_owned())
                                 .collect(),
                         )
                         .build()
