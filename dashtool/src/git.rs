@@ -18,6 +18,7 @@ pub(crate) fn diff<'a>(
 
     let new_tree = new_id
         .as_ref()
+        .or(new_id.as_ref())
         .cloned()
         .map(|x| repo.find_commit(x))
         .transpose()?
