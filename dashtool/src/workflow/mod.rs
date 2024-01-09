@@ -153,7 +153,13 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                             dag.dag
                                 .neighbors_directed(index, Direction::Incoming)
                                 .into_iter()
-                                .map(|x| dag.dag[x].identifier().to_lowercase().to_owned())
+                                .map(|x| {
+                                    dag.dag[x]
+                                        .identifier()
+                                        .replace(['/', '.'], "-")
+                                        .to_lowercase()
+                                        .to_owned()
+                                })
                                 .collect(),
                         )
                         .build()
