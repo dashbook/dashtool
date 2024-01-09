@@ -140,6 +140,7 @@ pub(super) async fn build_dag<'repo>(
                                     .bucket(catalog_name)
                                     .trim_end_matches('/')
                                     .to_string()
+                                    + "/"
                                     + path
                                         .to_str()
                                         .ok_or(Error::Text("No new file in delta".to_string()))?

@@ -76,6 +76,10 @@ impl Plugin for DashbookPlugin {
         "ghcr.io/dashbook/refresh-iceberg-datafusion:dashbook"
     }
 
+    fn refresh_config(&self, _identifier: &str, _branch: &str) -> Result<String, Error> {
+        Ok("ghcr.io/dashbook/refresh-iceberg-datafusion:dashbook".to_owned())
+    }
+
     fn init_containters(
         &self,
     ) -> Result<Option<Vec<IoArgoprojWorkflowV1alpha1UserContainer>>, Error> {

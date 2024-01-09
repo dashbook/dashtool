@@ -114,8 +114,8 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                             + "-config-template",
                     );
                     config_map.data = Some(BTreeMap::from_iter(vec![(
-                        "query.sql".to_owned(),
-                        serde_json::to_string(&node.query)?,
+                        "refresh.json".to_owned(),
+                        plugin.refresh_config(&node.identifier, &node.branch)?,
                     )]));
                     config_maps.insert(
                         node.identifier

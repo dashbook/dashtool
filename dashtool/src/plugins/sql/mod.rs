@@ -37,18 +37,25 @@ pub struct SqlPlugin {
 impl SqlPlugin {
     pub async fn new(path: &str) -> Result<Self, Error> {
         let config_json = fs::read_to_string(path)?;
-        let config: Config = serde_json::from_str(&config_json)?;
+        let mut config: Config = serde_json::from_str(&config_json)?;
 
+        let mut full_bucket_name = config.bucket.clone();
         let object_store: Arc<dyn ObjectStore> = match &config.object_store {
             ObjectStoreConfig::Memory => Arc::new(InMemory::new()),
-            ObjectStoreConfig::S3(s3_config) => Arc::new(
-                AmazonS3Builder::from_env()
-                    .with_region(&s3_config.aws_region)
-                    .with_bucket_name(config.bucket.clone())
-                    .with_access_key_id(&s3_config.aws_access_key_id)
-                    .build()?,
-            ),
+            ObjectStoreConfig::S3(s3_config) => {
+                full_bucket_name = "s3://".to_owned() + config.bucket.trim_start_matches("s3://");
+
+                Arc::new(
+                    AmazonS3Builder::from_env()
+                        .with_region(&s3_config.aws_region)
+                        .with_bucket_name(config.bucket.clone())
+                        .with_access_key_id(&s3_config.aws_access_key_id)
+                        .build()?,
+                )
+            }
         };
+
+        config.bucket = full_bucket_name;
 
         let catalog_list = Arc::new(SqlCatalogList::new(&config.catalog_url, object_store).await?);
 
@@ -72,6 +79,17 @@ impl SqlPlugin {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RefreshConfig {
+    #[serde(flatten)]
+    pub object_store: ObjectStoreConfig,
+    pub catalog_url: String,
+    pub identifier: String,
+    pub bucket: Option<String>,
+    pub branch: Option<String>,
+}
+
 #[async_trait]
 impl Plugin for SqlPlugin {
     async fn catalog_list(&self) -> Result<Arc<dyn CatalogList>, Error> {
@@ -84,6 +102,24 @@ impl Plugin for SqlPlugin {
 
     fn refresh_image(&self) -> &str {
         "ghcr.io/dashbook/refresh-iceberg-datafusion:sql"
+    }
+
+    fn refresh_config(&self, identifier: &str, branch: &str) -> Result<String, Error> {
+        let mut object_store_config = self.config.object_store.clone();
+        match &mut object_store_config {
+            ObjectStoreConfig::S3(config) => {
+                config.aws_secret_access_key = Some("$AWS_SECRET_ACCESS_KEY".to_owned())
+            }
+            _ => (),
+        }
+        let config = RefreshConfig {
+            identifier: identifier.to_owned(),
+            branch: Some(branch.to_owned()),
+            object_store: object_store_config,
+            catalog_url: self.config.catalog_url.clone(),
+            bucket: Some(self.config.bucket.clone()),
+        };
+        Ok(serde_json::to_string(&config).unwrap())
     }
 
     fn init_containters(

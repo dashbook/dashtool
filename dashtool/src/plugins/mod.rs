@@ -14,6 +14,7 @@ pub trait Plugin: Debug {
     async fn catalog_list(&self) -> Result<Arc<dyn CatalogList>, Error>;
     fn bucket(&self, catalog_name: &str) -> &str;
     fn refresh_image(&self) -> &str;
+    fn refresh_config(&self, identifier: &str, branch: &str) -> Result<String, Error>;
     fn init_containters(
         &self,
     ) -> Result<Option<Vec<IoArgoprojWorkflowV1alpha1UserContainer>>, Error>;
