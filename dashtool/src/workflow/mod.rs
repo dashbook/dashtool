@@ -54,7 +54,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                     let mut config_map = ConfigMap::default();
                     config_map.metadata.name = Some(
                         node.identifier
-                            .replace(['/', '.'], "-")
+                            .replace(['/', ':', '_', '.'], "-")
                             .to_lowercase()
                             .to_owned()
                             + "-config-template",
@@ -68,7 +68,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                     ]));
                     config_maps.insert(
                         node.identifier
-                            .replace(['/', '.'], "-")
+                            .replace(['/', ':', '_', '.'], "-")
                             .to_lowercase()
                             .clone(),
                         config_map,
@@ -78,12 +78,12 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                         .name(
                             node.identifier
                                 .clone()
-                                .replace(['/', '.'], "-")
+                                .replace(['/', ':', '_', '.'], "-")
                                 .to_lowercase(),
                         )
                         .template(Some(
                             serde_json::from_value::<String>(node.target["image"].clone())?
-                                .replace(['/', ':', '.'], "-"),
+                                .replace(['/', ':', '_', '.'], "-"),
                         ))
                         .arguments(Some(
                             ArgumentsBuilder::default()
@@ -94,7 +94,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                                         .value(Some(
                                             node.identifier
                                                 .clone()
-                                                .replace(['/', '.'], "-")
+                                                .replace(['/', ':', '_', '.'], "-")
                                                 .to_lowercase(),
                                         ))
                                         .build()?
@@ -108,7 +108,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                     let mut config_map = ConfigMap::default();
                     config_map.metadata.name = Some(
                         node.identifier
-                            .replace(['/', '.'], "-")
+                            .replace(['/', ':', '_', '.'], "-")
                             .to_lowercase()
                             .to_owned()
                             + "-config-template",
@@ -119,7 +119,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                     )]));
                     config_maps.insert(
                         node.identifier
-                            .replace(['/', '.'], "-")
+                            .replace(['/', ':', '_', '.'], "-")
                             .to_lowercase()
                             .clone(),
                         config_map,
@@ -129,7 +129,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                         .name(
                             node.identifier
                                 .clone()
-                                .replace(['/', '.'], "-")
+                                .replace(['/', ':', '_', '.'], "-")
                                 .to_lowercase(),
                         )
                         .template(Some("refresh".to_string()))
@@ -142,7 +142,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                                         .value(Some(
                                             node.identifier
                                                 .clone()
-                                                .replace(['/', '.'], "-")
+                                                .replace(['/', ':', '_', '.'], "-")
                                                 .to_lowercase(),
                                         ))
                                         .build()?
@@ -156,7 +156,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                                 .map(|x| {
                                     dag.dag[x]
                                         .identifier()
-                                        .replace(['/', '.'], "-")
+                                        .replace(['/', ':', '_', '.'], "-")
                                         .to_lowercase()
                                         .to_owned()
                                 })
