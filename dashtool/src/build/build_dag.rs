@@ -82,6 +82,7 @@ pub(super) async fn build_dag<'repo>(
                                             "not materialized view".to_string(),
                                         )))
                                     }?;
+                                let version_id = matview.metadata().current_version_id;
                                 let mut storage_table =
                                     matview.storage_table(Some(merged_branch)).await?;
                                 let snapshot_id = storage_table
@@ -96,7 +97,7 @@ pub(super) async fn build_dag<'repo>(
                                     .new_transaction(Some(merged_branch))
                                     .update_properties(vec![(
                                         REF_PREFIX.to_string() + branch,
-                                        snapshot_id.to_string(),
+                                        version_id.to_string(),
                                     )])
                                     .commit()
                                     .await?;
@@ -156,6 +157,10 @@ pub(super) async fn build_dag<'repo>(
                                     catalog,
                                 )?;
                                 builder.location(strip_prefix(&base_path));
+                                builder.properties(HashMap::from_iter(vec![(
+                                    REF_PREFIX.to_string() + branch,
+                                    1.to_string(),
+                                )]));
                                 builder.build().await?;
                             }
                             _ => (),
