@@ -26,6 +26,7 @@ pub struct Config {
     /// A nested map that maps a kubernetes secret name to a map from a environement name to the
     /// key of the secret value in the secret.
     pub secrets: HashMap<String, HashMap<String, String>>,
+    pub env: HashMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -116,7 +117,12 @@ impl Plugin for SqlPlugin {
             identifier: identifier.to_owned(),
             branch: Some(branch.to_owned()),
             object_store: object_store_config,
-            catalog_url: self.config.catalog_url.clone(),
+            catalog_url: self
+                .config
+                .env
+                .get("CATALOG_URL")
+                .cloned()
+                .unwrap_or(self.config.catalog_url.clone()),
             bucket: Some(self.config.bucket.clone()),
         };
         Ok(serde_json::to_string(&config).unwrap())

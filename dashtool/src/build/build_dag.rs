@@ -8,10 +8,13 @@ use iceberg_rust::{
     catalog::tabular::Tabular as IcebergTabular, error::Error as IcebergError,
     materialized_view::materialized_view_builder::MaterializedViewBuilder, sql::find_relations,
 };
-use iceberg_rust_spec::spec::{
-    schema::Schema,
-    snapshot::{Reference, Retention},
-    view_metadata::REF_PREFIX,
+use iceberg_rust_spec::{
+    spec::{
+        schema::Schema,
+        snapshot::{Reference, Retention},
+        view_metadata::REF_PREFIX,
+    },
+    util::strip_prefix,
 };
 use serde_json::Value as JsonValue;
 
@@ -152,7 +155,7 @@ pub(super) async fn build_dag<'repo>(
                                     schema,
                                     catalog,
                                 )?;
-                                builder.location(base_path);
+                                builder.location(strip_prefix(&base_path));
                                 builder.build().await?;
                             }
                             _ => (),
