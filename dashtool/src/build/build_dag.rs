@@ -11,7 +11,7 @@ use iceberg_rust::{
 use iceberg_rust_spec::{
     spec::{
         schema::Schema,
-        snapshot::{Reference, Retention},
+        snapshot::{SnapshotReference, SnapshotRetention},
         view_metadata::REF_PREFIX,
     },
     util::strip_prefix,
@@ -50,7 +50,7 @@ pub(super) async fn build_dag<'repo>(
                     .new_file()
                     .path()
                     .ok_or(Error::Text("No new file in delta".to_string()))?;
-                let is_tabular = if path.extension() == Some(&OsStr::new("sql")) {
+                let is_tabular = if path.extension() == Some(OsStr::new("sql")) {
                     Some(true)
                 } else if path.ends_with("target.json") {
                     Some(false)
@@ -59,12 +59,12 @@ pub(super) async fn build_dag<'repo>(
                 };
                 match is_tabular {
                     Some(true) => {
-                        let identifier = FullIdentifier::parse_path(&path)?;
+                        let identifier = FullIdentifier::parse_path(path)?;
 
                         let catalog_name = identifier.catalog_name();
 
                         let catalog = catalog_list.catalog(catalog_name).await.ok_or(
-                            IcebergError::NotFound(format!("Catalog"), catalog_name.to_string()),
+                            IcebergError::NotFound("Catalog".to_string(), catalog_name.to_string()),
                         )?;
 
                         let sql = fs::read_to_string(path)?;
@@ -105,9 +105,9 @@ pub(super) async fn build_dag<'repo>(
                                     .new_transaction(Some(merged_branch))
                                     .set_ref((
                                         branch.to_string(),
-                                        Reference {
+                                        SnapshotReference {
                                             snapshot_id,
-                                            retention: Retention::default(),
+                                            retention: SnapshotRetention::default(),
                                         },
                                     ))
                                     .commit()
@@ -117,12 +117,12 @@ pub(super) async fn build_dag<'repo>(
                                 let relations = relations
                                     .iter()
                                     .map(|x| {
-                                        FullIdentifier::parse(x).and_then(|y| {
-                                            Ok((
+                                        FullIdentifier::parse(x).map(|y| {
+                                            (
                                                 y.catalog_name().clone(),
                                                 y.namespace_name().clone(),
                                                 y.table_name().clone(),
-                                            ))
+                                            )
                                         })
                                     })
                                     .collect::<Result<Vec<_>, _>>()?;
@@ -131,7 +131,7 @@ pub(super) async fn build_dag<'repo>(
                                     &sql,
                                     &relations,
                                     catalog_list.clone(),
-                                    Some(&branch),
+                                    Some(branch),
                                 )
                                 .await?;
 
@@ -188,16 +188,18 @@ pub(super) async fn build_dag<'repo>(
                             {
                                 Ok(object)
                             } else {
-                                Err(Error::Text(format!("Streams in config must be an object.")))
+                                Err(Error::Text(
+                                    "Streams in config must be an object.".to_string(),
+                                ))
                             }?;
 
                             for table in streams.values() {
                                 let name = if let JsonValue::String(object) = table {
                                     Ok(object)
                                 } else {
-                                    Err(Error::Text(format!(
-                                        "Streams in config must be an object."
-                                    )))
+                                    Err(Error::Text(
+                                        "Streams in config must be an object.".to_string(),
+                                    ))
                                 }?;
 
                                 let identifier = FullIdentifier::parse(name)?;
@@ -205,7 +207,7 @@ pub(super) async fn build_dag<'repo>(
 
                                 let catalog = catalog_list.catalog(catalog_name).await.ok_or(
                                     IcebergError::NotFound(
-                                        format!("Catalog"),
+                                        "Catalog".to_string(),
                                         catalog_name.to_string(),
                                     ),
                                 )?;
@@ -232,9 +234,9 @@ pub(super) async fn build_dag<'repo>(
                                     .new_transaction(Some(merged_branch))
                                     .set_ref((
                                         branch.to_string(),
-                                        Reference {
+                                        SnapshotReference {
                                             snapshot_id,
-                                            retention: Retention::default(),
+                                            retention: SnapshotRetention::default(),
                                         },
                                     ))
                                     .commit()
@@ -372,7 +374,7 @@ mod tests {
         let mut index = repo.index().expect("Failed to create index");
         index
             .add_path(
-                &tap_path
+                tap_path
                     .as_path()
                     .strip_prefix(temp_dir.path())
                     .expect("Failed to get relative path of file"),
@@ -380,7 +382,7 @@ mod tests {
             .expect("Failed to add path to index");
         index
             .add_path(
-                &target_path
+                target_path
                     .as_path()
                     .strip_prefix(temp_dir.path())
                     .expect("Failed to get relative path of file"),
@@ -432,11 +434,7 @@ mod tests {
 
         assert_eq!(orders, "bronze/inventory");
 
-        let singer = &dag.dag[dag
-            .map
-            .get(orders)
-            .expect("Failed to get graph index")
-            .clone()];
+        let singer = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
 
         let Node::Singer(singer) = singer else {
             panic!("Node is not a singer")
@@ -505,7 +503,7 @@ mod tests {
         let mut index = repo.index().expect("Failed to create index");
         index
             .add_path(
-                &tap_path
+                tap_path
                     .as_path()
                     .strip_prefix(temp_dir.path())
                     .expect("Failed to get relative path of file"),
@@ -513,7 +511,7 @@ mod tests {
             .expect("Failed to add path to index");
         index
             .add_path(
-                &target_path
+                target_path
                     .as_path()
                     .strip_prefix(temp_dir.path())
                     .expect("Failed to get relative path of file"),
@@ -539,7 +537,7 @@ mod tests {
 
         index
             .add_path(
-                &tabular_path
+                tabular_path
                     .as_path()
                     .strip_prefix(temp_dir.path())
                     .expect("Failed to get relative path of file"),
@@ -612,7 +610,7 @@ mod tests {
                 .unwrap(),
         };
         let partition_spec = PartitionSpecBuilder::default()
-            .spec_id(1)
+            .with_spec_id(1)
             .with_partition_field(PartitionField {
                 source_id: 4,
                 field_id: 1000,
@@ -655,11 +653,10 @@ mod tests {
         assert_eq!(dag.singers.len(), 1);
         assert_eq!(dag.map.len(), 2);
 
-        let tabular = &dag.dag[dag
+        let tabular = &dag.dag[*dag
             .map
             .get("silver.inventory.factOrder")
-            .expect("Failed to get graph index")
-            .clone()];
+            .expect("Failed to get graph index")];
 
         let Node::Tabular(tabular) = tabular else {
             panic!("Node is not a singer")

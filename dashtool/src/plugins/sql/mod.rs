@@ -56,6 +56,10 @@ impl SqlPlugin {
                     builder = builder.with_endpoint(endpoint);
                 }
 
+                if let Some(allow_http) = &s3_config.aws_allow_http {
+                    builder = builder.with_allow_http(allow_http.parse()?);
+                }
+
                 Arc::new(builder.build()?)
             }
         };

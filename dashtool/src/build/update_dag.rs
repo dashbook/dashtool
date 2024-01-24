@@ -11,11 +11,7 @@ use crate::{
 };
 
 // Converts the commits into a dag without performing any operations on the tables
-pub(super) fn update_dag<'repo>(
-    diff: Diff<'repo>,
-    dag: Option<Dag>,
-    branch: &str,
-) -> Result<Dag, Error> {
+pub(super) fn update_dag(diff: Diff<'_>, dag: Option<Dag>, branch: &str) -> Result<Dag, Error> {
     let mut dag = dag.unwrap_or(Dag::new());
 
     let mut singers = Vec::new();
@@ -26,7 +22,7 @@ pub(super) fn update_dag<'repo>(
             .new_file()
             .path()
             .ok_or(Error::Text("No new file in delta".to_string()))?;
-        let is_tabular = if path.extension() == Some(&OsStr::new("sql")) {
+        let is_tabular = if path.extension() == Some(OsStr::new("sql")) {
             Some(true)
         } else if path.ends_with("target.json") {
             Some(false)
@@ -65,7 +61,7 @@ pub(super) fn update_dag<'repo>(
 
         let children = find_relations(&sql)?;
 
-        let identifier = FullIdentifier::parse_path(&path)?.to_string();
+        let identifier = FullIdentifier::parse_path(path)?.to_string();
 
         dag.add_node(Node::Tabular(Tabular::new(&identifier, branch, &sql)));
 
@@ -141,7 +137,7 @@ mod tests {
         let mut index = repo.index().expect("Failed to create index");
         index
             .add_path(
-                &tap_path
+                tap_path
                     .as_path()
                     .strip_prefix(temp_dir.path())
                     .expect("Failed to get relative path of file"),
@@ -149,7 +145,7 @@ mod tests {
             .expect("Failed to add path to index");
         index
             .add_path(
-                &target_path
+                target_path
                     .as_path()
                     .strip_prefix(temp_dir.path())
                     .expect("Failed to get relative path of file"),
@@ -171,11 +167,7 @@ mod tests {
             .expect("Failed to get singer");
         assert_eq!(orders, "bronze/inventory");
 
-        let singer = &dag.dag[dag
-            .map
-            .get(orders)
-            .expect("Failed to get graph index")
-            .clone()];
+        let singer = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
 
         let Node::Singer(singer) = singer else {
             panic!("Node is not a singer")
@@ -243,7 +235,7 @@ mod tests {
         let mut index = repo.index().expect("Failed to create index");
         index
             .add_path(
-                &tap_path
+                tap_path
                     .as_path()
                     .strip_prefix(temp_dir.path())
                     .expect("Failed to get relative path of file"),
@@ -251,7 +243,7 @@ mod tests {
             .expect("Failed to add path to index");
         index
             .add_path(
-                &target_path
+                target_path
                     .as_path()
                     .strip_prefix(temp_dir.path())
                     .expect("Failed to get relative path of file"),
@@ -277,7 +269,7 @@ mod tests {
 
         index
             .add_path(
-                &tabular_path
+                tabular_path
                     .as_path()
                     .strip_prefix(temp_dir.path())
                     .expect("Failed to get relative path of file"),
@@ -293,11 +285,10 @@ mod tests {
         assert_eq!(dag.singers.len(), 1);
         assert_eq!(dag.map.len(), 2);
 
-        let tabular = &dag.dag[dag
+        let tabular = &dag.dag[*dag
             .map
             .get("silver.inventory.factOrder")
-            .expect("Failed to get graph index")
-            .clone()];
+            .expect("Failed to get graph index")];
 
         let Node::Tabular(tabular) = tabular else {
             panic!("Node is not a singer")
@@ -362,7 +353,7 @@ mod tests {
         let mut index = repo.index().expect("Failed to create index");
         index
             .add_path(
-                &tap_path
+                tap_path
                     .as_path()
                     .strip_prefix(temp_dir.path())
                     .expect("Failed to get relative path of file"),
@@ -370,7 +361,7 @@ mod tests {
             .expect("Failed to add path to index");
         index
             .add_path(
-                &target_path
+                target_path
                     .as_path()
                     .strip_prefix(temp_dir.path())
                     .expect("Failed to get relative path of file"),
@@ -392,11 +383,7 @@ mod tests {
             .expect("Failed to get singer");
         assert_eq!(orders, "bronze/inventory");
 
-        let singer = &dag.dag[dag
-            .map
-            .get(orders)
-            .expect("Failed to get graph index")
-            .clone()];
+        let singer = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
 
         let Node::Singer(singer) = singer else {
             panic!("Node is not a singer")

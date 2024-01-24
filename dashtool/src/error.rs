@@ -47,6 +47,8 @@ pub enum Error {
     #[error(transparent)]
     Parse(#[from] url::ParseError),
     #[error(transparent)]
+    StrParse(#[from] std::str::ParseBoolError),
+    #[error(transparent)]
     SQLParser(#[from] sqlparser::parser::ParserError),
     #[error(transparent)]
     DashbookCatalog(#[from] dashbook_catalog::error::Error),

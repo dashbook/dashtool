@@ -49,7 +49,7 @@ impl DashbookPlugin {
 
         let (access_token, id_token) = authorization(issuer, client_id, &refresh_token).await?;
 
-        let catalog_list = Arc::new(DashbookS3CatalogList::new(&access_token, &id_token));
+        let catalog_list = Arc::new(DashbookS3CatalogList::new(&access_token, &id_token).await?);
 
         Ok(DashbookPlugin {
             config,
