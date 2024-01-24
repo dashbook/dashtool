@@ -18,6 +18,7 @@ pub struct S3Config {
     pub aws_access_key_id: String,
     pub aws_region: String,
     pub aws_secret_access_key: Option<String>,
+    pub aws_endpoint: Option<String>,
 }
 
 impl From<Option<ObjectStoreConfigSerde>> for ObjectStoreConfig {

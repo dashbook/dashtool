@@ -47,13 +47,16 @@ impl SqlPlugin {
             ObjectStoreConfig::S3(s3_config) => {
                 full_bucket_name = "s3://".to_owned() + config.bucket.trim_start_matches("s3://");
 
-                Arc::new(
-                    AmazonS3Builder::from_env()
-                        .with_region(&s3_config.aws_region)
-                        .with_bucket_name(config.bucket.clone())
-                        .with_access_key_id(&s3_config.aws_access_key_id)
-                        .build()?,
-                )
+                let mut builder = AmazonS3Builder::from_env()
+                    .with_region(&s3_config.aws_region)
+                    .with_bucket_name(config.bucket.clone())
+                    .with_access_key_id(&s3_config.aws_access_key_id);
+
+                if let Some(endpoint) = &s3_config.aws_endpoint {
+                    builder = builder.with_endpoint(endpoint);
+                }
+
+                Arc::new(builder.build()?)
             }
         };
 
