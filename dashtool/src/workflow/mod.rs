@@ -198,24 +198,17 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
         )
         .build()?;
 
-    let workflow_yaml = serde_yaml::to_string(&workflow)?;
+    let mut workflow_yaml = serde_yaml::to_string(&workflow)?;
+
+    for config_map in config_maps {
+        let yaml = serde_yaml::to_string(&config_map.1)?;
+        workflow_yaml.push_str("---\n");
+        workflow_yaml.push_str(&yaml);
+    }
 
     fs::write(
         &(WORKFLOW_DIR.to_string() + "/workflow.yaml"),
         workflow_yaml,
-    )?;
-
-    let mut config_map_yaml = String::new();
-
-    for config_map in config_maps {
-        let yaml = serde_yaml::to_string(&config_map.1)?;
-        config_map_yaml.push_str("---\n");
-        config_map_yaml.push_str(&yaml);
-    }
-
-    fs::write(
-        &(WORKFLOW_DIR.to_string() + "/config_maps.yaml"),
-        config_map_yaml,
     )?;
 
     Ok(())
