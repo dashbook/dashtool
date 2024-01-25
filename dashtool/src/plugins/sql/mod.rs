@@ -117,7 +117,8 @@ impl Plugin for SqlPlugin {
         let mut object_store_config = self.config.object_store.clone();
         match &mut object_store_config {
             ObjectStoreConfig::S3(config) => {
-                config.aws_secret_access_key = Some("$AWS_SECRET_ACCESS_KEY".to_owned())
+                config.aws_secret_access_key = Some("$AWS_SECRET_ACCESS_KEY".to_owned());
+                config.aws_endpoint = self.config.env.get("AWS_ENDPOINT").cloned()
             }
             _ => (),
         }
