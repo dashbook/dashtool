@@ -51,8 +51,6 @@ pub enum Error {
     #[error(transparent)]
     SQLParser(#[from] sqlparser::parser::ParserError),
     #[error(transparent)]
-    DashbookCatalog(#[from] dashbook_catalog::error::Error),
-    #[error(transparent)]
     Datafusion(#[from] datafusion_common::DataFusionError),
     #[error(transparent)]
     ArgoDagTask(#[from] argo_workflow::schema::DagTaskBuilderError),

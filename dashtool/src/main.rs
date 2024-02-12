@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use dashtool::{
     build::build,
     error::Error,
-    plugins::{dashbook::DashbookPlugin, sql::SqlPlugin, Plugin},
+    plugins::{sql::SqlPlugin, Plugin},
     workflow::{workflow, WORKFLOW_DIR},
 };
 
@@ -41,9 +41,6 @@ async fn main() -> Result<(), Error> {
     )?;
 
     let plugin: Arc<dyn Plugin> = match args.plugin.as_deref() {
-        Some("dashbook") | None => {
-            Ok(Arc::new(DashbookPlugin::new("dashtool.json").await?) as Arc<dyn Plugin>)
-        }
         Some("sql") => Ok(Arc::new(SqlPlugin::new("dashtool.json").await?) as Arc<dyn Plugin>),
         _ => Err(Error::Text("Unknown plugin".to_string())),
     }?;

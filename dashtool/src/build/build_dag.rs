@@ -8,10 +8,14 @@ use iceberg_rust::{
     catalog::tabular::Tabular as IcebergTabular, error::Error as IcebergError,
     materialized_view::materialized_view_builder::MaterializedViewBuilder, sql::find_relations,
 };
-use iceberg_rust_spec::spec::{
-    schema::Schema,
-    snapshot::{SnapshotReference, SnapshotRetention},
-    view_metadata::REF_PREFIX,
+use iceberg_rust_spec::{
+    spec::{
+        schema::SchemaBuilder,
+        snapshot::{SnapshotReference, SnapshotRetention},
+        table_metadata::new_metadata_location,
+        view_metadata::REF_PREFIX,
+    },
+    util::strip_prefix,
 };
 use serde_json::Value as JsonValue;
 
@@ -80,33 +84,38 @@ pub(super) async fn build_dag<'repo>(
                                         )))
                                     }?;
                                 let version_id = matview.metadata().current_version_id;
-                                let mut storage_table =
-                                    matview.storage_table(Some(merged_branch)).await?;
-                                let snapshot_id = storage_table
-                                    .metadata()
+                                let mut storage_table = matview.storage_table().await?;
+                                let snapshot_id = *storage_table
                                     .current_snapshot(Some(merged_branch))?
                                     .ok_or(Error::Iceberg(IcebergError::NotFound(
                                         "Snapshot id".to_string(),
                                         "branch".to_string() + merged_branch,
                                     )))?
-                                    .snapshot_id;
+                                    .snapshot_id();
+                                storage_table.table_metadata.refs.insert(
+                                    branch.to_string(),
+                                    SnapshotReference {
+                                        snapshot_id,
+                                        retention: SnapshotRetention::default(),
+                                    },
+                                );
+                                let metaddata_location =
+                                    new_metadata_location(matview.metadata().into());
+                                matview
+                                    .object_store()
+                                    .put(
+                                        &strip_prefix(&metaddata_location).as_str().into(),
+                                        serde_json::to_string(&storage_table.table_metadata)?
+                                            .into(),
+                                    )
+                                    .await?;
                                 matview
                                     .new_transaction(Some(merged_branch))
                                     .update_properties(vec![(
                                         REF_PREFIX.to_string() + branch,
                                         version_id.to_string(),
                                     )])
-                                    .commit()
-                                    .await?;
-                                storage_table
-                                    .new_transaction(Some(merged_branch))
-                                    .set_ref((
-                                        branch.to_string(),
-                                        SnapshotReference {
-                                            snapshot_id,
-                                            retention: SnapshotRetention::default(),
-                                        },
-                                    ))
+                                    .update_materialization(&metaddata_location)
                                     .commit()
                                     .await?;
                             }
@@ -132,11 +141,12 @@ pub(super) async fn build_dag<'repo>(
                                 )
                                 .await?;
 
-                                let schema = Schema {
-                                    schema_id: 1,
-                                    identifier_field_ids: None,
-                                    fields,
-                                };
+                                let schema = SchemaBuilder::default()
+                                    .with_schema_id(1)
+                                    .with_fields(fields)
+                                    .build()
+                                    .map_err(iceberg_rust_spec::error::Error::from)?;
+
                                 let base_path = plugin
                                     .bucket(catalog_name)
                                     .trim_end_matches('/')
@@ -219,17 +229,17 @@ pub(super) async fn build_dag<'repo>(
                                         "not table".to_string(),
                                     )))
                                 }?;
-                                let snapshot_id = table
+                                let snapshot_id = *table
                                     .metadata()
                                     .current_snapshot(Some(merged_branch))?
                                     .ok_or(Error::Iceberg(IcebergError::NotFound(
                                         "Snapshot id".to_string(),
                                         "branch".to_string() + merged_branch,
                                     )))?
-                                    .snapshot_id;
+                                    .snapshot_id();
                                 table
                                     .new_transaction(Some(merged_branch))
-                                    .set_ref((
+                                    .set_snapshot_ref((
                                         branch.to_string(),
                                         SnapshotReference {
                                             snapshot_id,
@@ -300,7 +310,7 @@ mod tests {
     };
     use iceberg_rust_spec::spec::{
         partition::{PartitionField, PartitionSpecBuilder, Transform},
-        schema::Schema,
+        schema::SchemaBuilder,
         types::{PrimitiveType, StructField, StructTypeBuilder, Type},
     };
     use object_store::memory::InMemory;
@@ -564,56 +574,54 @@ mod tests {
             .await
             .expect("Failed to create catalog");
 
-        let schema = Schema {
-            schema_id: 1,
-            identifier_field_ids: None,
-            fields: StructTypeBuilder::default()
-                .with_struct_field(StructField {
-                    id: 1,
-                    name: "id".to_string(),
-                    required: true,
-                    field_type: Type::Primitive(PrimitiveType::Long),
-                    doc: None,
-                })
-                .with_struct_field(StructField {
-                    id: 2,
-                    name: "customer_id".to_string(),
-                    required: true,
-                    field_type: Type::Primitive(PrimitiveType::Long),
-                    doc: None,
-                })
-                .with_struct_field(StructField {
-                    id: 3,
-                    name: "product_id".to_string(),
-                    required: true,
-                    field_type: Type::Primitive(PrimitiveType::Long),
-                    doc: None,
-                })
-                .with_struct_field(StructField {
-                    id: 4,
-                    name: "date".to_string(),
-                    required: true,
-                    field_type: Type::Primitive(PrimitiveType::Date),
-                    doc: None,
-                })
-                .with_struct_field(StructField {
-                    id: 5,
-                    name: "amount".to_string(),
-                    required: true,
-                    field_type: Type::Primitive(PrimitiveType::Int),
-                    doc: None,
-                })
-                .build()
-                .unwrap(),
-        };
+        let schema = SchemaBuilder::default()
+            .with_schema_id(1)
+            .with_fields(
+                StructTypeBuilder::default()
+                    .with_struct_field(StructField {
+                        id: 1,
+                        name: "id".to_string(),
+                        required: true,
+                        field_type: Type::Primitive(PrimitiveType::Long),
+                        doc: None,
+                    })
+                    .with_struct_field(StructField {
+                        id: 2,
+                        name: "customer_id".to_string(),
+                        required: true,
+                        field_type: Type::Primitive(PrimitiveType::Long),
+                        doc: None,
+                    })
+                    .with_struct_field(StructField {
+                        id: 3,
+                        name: "product_id".to_string(),
+                        required: true,
+                        field_type: Type::Primitive(PrimitiveType::Long),
+                        doc: None,
+                    })
+                    .with_struct_field(StructField {
+                        id: 4,
+                        name: "date".to_string(),
+                        required: true,
+                        field_type: Type::Primitive(PrimitiveType::Date),
+                        doc: None,
+                    })
+                    .with_struct_field(StructField {
+                        id: 5,
+                        name: "amount".to_string(),
+                        required: true,
+                        field_type: Type::Primitive(PrimitiveType::Int),
+                        doc: None,
+                    })
+                    .build()
+                    .unwrap(),
+            )
+            .build()
+            .unwrap();
+
         let partition_spec = PartitionSpecBuilder::default()
             .with_spec_id(1)
-            .with_partition_field(PartitionField {
-                source_id: 4,
-                field_id: 1000,
-                name: "day".to_string(),
-                transform: Transform::Day,
-            })
+            .with_partition_field(PartitionField::new(4, 1000, "day", Transform::Day))
             .build()
             .expect("Failed to create partition spec");
 
@@ -688,13 +696,13 @@ mod tests {
             .current_schema(None)
             .expect("Failed to get schema");
 
-        assert_eq!(schema.fields.fields[0].name, "product_id");
-        assert_eq!(schema.fields.fields[0].field_type.to_string(), "long");
+        assert_eq!(schema.fields()[0].name, "product_id");
+        assert_eq!(schema.fields()[0].field_type.to_string(), "long");
 
         assert_eq!(
-            schema.fields.fields[1].name,
+            schema.fields()[1].name,
             "SUM(bronze.inventory.orders.amount)"
         );
-        assert_eq!(schema.fields.fields[1].field_type.to_string(), "long");
+        assert_eq!(schema.fields()[1].field_type.to_string(), "long");
     }
 }

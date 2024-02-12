@@ -6,7 +6,6 @@ use iceberg_rust::catalog::CatalogList;
 
 use crate::error::Error;
 
-pub mod dashbook;
 pub mod sql;
 
 #[async_trait]
