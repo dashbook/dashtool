@@ -12,7 +12,7 @@ use iceberg_rust_spec::{
     spec::{
         schema::SchemaBuilder,
         snapshot::{SnapshotReference, SnapshotRetention},
-        table_metadata::new_metadata_location,
+        table_metadata::{new_metadata_location, MAIN_BRANCH},
         view_metadata::REF_PREFIX,
     },
     util::strip_prefix,
@@ -99,6 +99,9 @@ pub(super) async fn build_dag<'repo>(
                                         retention: SnapshotRetention::default(),
                                     },
                                 );
+                                if branch == MAIN_BRANCH {
+                                    storage_table.current_snapshot_id = Some(snapshot_id);
+                                }
                                 let metaddata_location =
                                     new_metadata_location(matview.metadata().into());
                                 matview

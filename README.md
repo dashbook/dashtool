@@ -1,6 +1,6 @@
 # Dashtool
 
-Dashtool is a Lakehouse build tool that turns declarative SQL queries into Iceberg tables and generates Kubernetes workflows to keep these tables up-to-date.
+Dashtool is a Lakehouse build tool that builds Iceberg tables from declarative SQL queries and generates Kubernetes workflows to keep these tables up-to-date.
 
 ## Features
 
