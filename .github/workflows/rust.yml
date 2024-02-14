@@ -11,8 +11,11 @@ env:
 
 jobs:
   build:
+    strategy:
+      matrix: 
+        runner: [ubuntu-latest, windows-latest, macos-latest]
 
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
 
     steps:
     - uses: actions/checkout@v3
