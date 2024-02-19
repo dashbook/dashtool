@@ -17,7 +17,7 @@ use iceberg_rust_spec::{
     },
     util::strip_prefix,
 };
-use serde_json::Value as JsonValue;
+use serde_json::{Map, Value as JsonValue};
 
 use crate::{
     dag::{identifier::FullIdentifier, Dag, Node, Singer, Tabular},
@@ -185,17 +185,22 @@ pub(super) async fn build_dag<'repo>(
                             anyhow!("target.json must be inside a subfolder."),
                         ))?;
                         let tap_path = parent_path.join("tap.json");
-                        let tap_json = serde_json::from_str(&fs::read_to_string(&tap_path)?)?;
+                        let tap_json: JsonValue =
+                            serde_json::from_str(&fs::read_to_string(&tap_path)?)?;
                         let mut target_json: JsonValue =
                             serde_json::from_str(&fs::read_to_string(path)?)?;
                         target_json["branch"] = branch.to_string().into();
-                        let identifier = parent_path
-                            .to_str()
-                            .ok_or(Error::Anyhow(anyhow!("Failed to convert path to string.")))?;
 
-                        if let Some(merged_branch) = merged_branch {
-                            let streams = if let JsonValue::Object(object) = &target_json["streams"]
-                            {
+                        let streams = if let JsonValue::Object(object) = &target_json["streams"] {
+                            Ok(object)
+                        } else {
+                            Err(Error::Text(
+                                "Streams in config must be an object.".to_string(),
+                            ))
+                        }?;
+
+                        for (stream, table_name) in streams.iter() {
+                            let name = if let JsonValue::String(object) = table_name {
                                 Ok(object)
                             } else {
                                 Err(Error::Text(
@@ -203,15 +208,7 @@ pub(super) async fn build_dag<'repo>(
                                 ))
                             }?;
 
-                            for table in streams.values() {
-                                let name = if let JsonValue::String(object) = table {
-                                    Ok(object)
-                                } else {
-                                    Err(Error::Text(
-                                        "Streams in config must be an object.".to_string(),
-                                    ))
-                                }?;
-
+                            if let Some(merged_branch) = merged_branch {
                                 let identifier = FullIdentifier::parse(name)?;
                                 let catalog_name = identifier.catalog_name();
 
@@ -252,16 +249,18 @@ pub(super) async fn build_dag<'repo>(
                                     .commit()
                                     .await?;
                             }
-                        };
-
-                        singer_sender
-                            .send(Node::Singer(Singer::new(
-                                identifier,
-                                tap_json,
-                                target_json,
-                                branch,
-                            )))
-                            .await?;
+                            let mut target_json = target_json.clone();
+                            target_json["streams"] =
+                                Map::from_iter(vec![(stream.clone(), table_name.clone())]).into();
+                            singer_sender
+                                .send(Node::Singer(Singer::new(
+                                    name,
+                                    tap_json.clone(),
+                                    target_json,
+                                    branch,
+                                )))
+                                .await?;
+                        }
                     }
                     _ => (),
                 };
@@ -430,21 +429,20 @@ mod tests {
                 .expect("Failed to create plugin"),
         );
 
+        dbg!(&dag);
+
         build_dag(&mut dag, main_diff, plugin, "main", None)
             .await
             .expect("Failed to build dag");
 
-        assert_eq!(dag.singers.len(), 1);
+        dbg!(&dag);
+
         assert_eq!(dag.map.len(), 1);
 
-        let orders = dag
-            .singers
+        let singer = &dag.dag[*dag
+            .map
             .get("bronze.inventory.orders")
-            .expect("Failed to get singer");
-
-        assert_eq!(orders, "bronze/inventory");
-
-        let singer = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
+            .expect("Failed to get graph index")];
 
         let Node::Singer(singer) = singer else {
             panic!("Node is not a singer")
@@ -658,7 +656,6 @@ mod tests {
             .await
             .expect("Failed to build dag");
 
-        assert_eq!(dag.singers.len(), 1);
         assert_eq!(dag.map.len(), 2);
 
         let tabular = &dag.dag[*dag

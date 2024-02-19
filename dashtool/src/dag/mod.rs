@@ -64,7 +64,6 @@ impl Singer {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Dag {
-    pub(crate) singers: HashMap<String, String>,
     pub(crate) map: HashMap<String, NodeIndex>,
     pub(crate) dag: StableDiGraph<Node, ()>,
 }
@@ -72,7 +71,6 @@ pub struct Dag {
 impl Dag {
     pub fn new() -> Self {
         Self {
-            singers: HashMap::new(),
             map: HashMap::new(),
             dag: StableDiGraph::new(),
         }
@@ -81,21 +79,7 @@ impl Dag {
 
 impl Dag {
     pub(crate) fn add_node(&mut self, node: Node) {
-        let identifier = match &node {
-            Node::Singer(singer) => {
-                let identifier = singer.identifier.clone();
-                let streams: HashMap<String, String> =
-                    serde_json::from_value(singer.target["streams"].clone())
-                        .expect("target.json must contain streams field.");
-                for (_, stream) in &streams {
-                    self.singers.insert(stream.clone(), identifier.clone());
-                }
-                identifier
-            }
-            Node::Tabular(tab) => tab.identifier.clone(),
-        };
-
-        match self.map.entry(identifier) {
+        match self.map.entry(node.identifier().to_string()) {
             Entry::Vacant(entry) => {
                 let idx = self.dag.add_node(node);
                 entry.insert(idx);
@@ -113,18 +97,12 @@ impl Dag {
             .get(a)
             .cloned()
             .ok_or(Error::Text("Node not in graph.".to_string()))?;
-        let b = match self.singers.get(b) {
-            None => self
-                .map
-                .get(b)
-                .cloned()
-                .ok_or(Error::Text("Node not in graph.".to_string()))?,
-            Some(ident) => self
-                .map
-                .get(ident)
-                .cloned()
-                .ok_or(Error::Text("Node not in graph.".to_string()))?,
-        };
+
+        let b = self
+            .map
+            .get(b)
+            .cloned()
+            .ok_or(Error::Text("Node not in graph.".to_string()))?;
 
         self.dag.add_edge(b, a, ());
         Ok(())
@@ -139,7 +117,6 @@ pub fn get_dag(branch: &str) -> Result<Dag, Error> {
         dag
     } else {
         Dag {
-            singers: HashMap::new(),
             map: HashMap::new(),
             dag: StableDiGraph::new(),
         }

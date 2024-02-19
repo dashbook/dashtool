@@ -3,7 +3,7 @@ use std::{ffi::OsStr, fs, path::Path};
 use anyhow::anyhow;
 use git2::{Delta, Diff};
 use iceberg_rust::sql::find_relations;
-use serde_json::Value as JsonValue;
+use serde_json::{Map, Value as JsonValue};
 
 use crate::{
     dag::{identifier::FullIdentifier, Dag, Node, Singer, Tabular},
@@ -42,18 +42,35 @@ pub(super) fn update_dag(diff: Diff<'_>, dag: Option<Dag>, branch: &str) -> Resu
             "target.json must be inside a subfolder."
         )))?;
         let tap_path = parent_path.join("tap.json");
-        let tap_json = serde_json::from_str(&fs::read_to_string(&tap_path)?)?;
+        let tap_json: JsonValue = serde_json::from_str(&fs::read_to_string(&tap_path)?)?;
         let mut target_json: JsonValue = serde_json::from_str(&fs::read_to_string(path)?)?;
         target_json["branch"] = branch.to_string().into();
-        let identifier = parent_path
-            .to_str()
-            .ok_or(Error::Anyhow(anyhow!("Failed to convert path to string.")))?;
-        dag.add_node(Node::Singer(Singer::new(
-            identifier,
-            tap_json,
-            target_json,
-            branch,
-        )));
+        let streams = if let JsonValue::Object(object) = &target_json["streams"] {
+            Ok(object)
+        } else {
+            Err(Error::Text(
+                "Streams in config must be an object.".to_string(),
+            ))
+        }?;
+
+        for (stream, table_name) in streams.iter() {
+            let name = if let JsonValue::String(object) = table_name {
+                Ok(object)
+            } else {
+                Err(Error::Text(
+                    "Streams in config must be an object.".to_string(),
+                ))
+            }?;
+            let mut target_json = target_json.clone();
+            target_json["streams"] =
+                Map::from_iter(vec![(stream.clone(), table_name.clone())]).into();
+            dag.add_node(Node::Singer(Singer::new(
+                name,
+                tap_json.clone(),
+                target_json,
+                branch,
+            )));
+        }
     }
 
     for path in tabulars {
@@ -158,16 +175,12 @@ mod tests {
 
         let dag = update_dag(diff, None, "main").expect("Failed to create dag");
 
-        assert_eq!(dag.singers.len(), 1);
         assert_eq!(dag.map.len(), 1);
 
-        let orders = dag
-            .singers
+        let singer = &dag.dag[*dag
+            .map
             .get("bronze.inventory.orders")
-            .expect("Failed to get singer");
-        assert_eq!(orders, "bronze/inventory");
-
-        let singer = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
+            .expect("Failed to get graph index")];
 
         let Node::Singer(singer) = singer else {
             panic!("Node is not a singer")
@@ -282,7 +295,6 @@ mod tests {
 
         let dag = update_dag(diff, None, "main").expect("Failed to create dag");
 
-        assert_eq!(dag.singers.len(), 1);
         assert_eq!(dag.map.len(), 2);
 
         let tabular = &dag.dag[*dag
@@ -374,16 +386,12 @@ mod tests {
 
         let dag = update_dag(diff, None, "expenditures").expect("Failed to create dag");
 
-        assert_eq!(dag.singers.len(), 1);
         assert_eq!(dag.map.len(), 1);
 
-        let orders = dag
-            .singers
+        let singer = &dag.dag[*dag
+            .map
             .get("bronze.inventory.orders")
-            .expect("Failed to get singer");
-        assert_eq!(orders, "bronze/inventory");
-
-        let singer = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
+            .expect("Failed to get graph index")];
 
         let Node::Singer(singer) = singer else {
             panic!("Node is not a singer")
