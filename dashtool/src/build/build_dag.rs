@@ -199,13 +199,12 @@ pub(super) async fn build_dag<'repo>(
                             ))
                         }?;
 
-                        for (stream, table_name) in streams.iter() {
-                            let name = if let JsonValue::String(object) = table_name {
-                                Ok(object)
+                        for (stream, stream_config) in streams.iter() {
+                            let name = if let JsonValue::String(name) = &stream_config["identifier"]
+                            {
+                                Ok(name)
                             } else {
-                                Err(Error::Text(
-                                    "Streams in config must be an object.".to_string(),
-                                ))
+                                Err(Error::Text("Stream identifer is not a string.".to_string()))
                             }?;
 
                             if let Some(merged_branch) = merged_branch {
@@ -251,7 +250,8 @@ pub(super) async fn build_dag<'repo>(
                             }
                             let mut target_json = target_json.clone();
                             target_json["streams"] =
-                                Map::from_iter(vec![(stream.clone(), table_name.clone())]).into();
+                                Map::from_iter(vec![(stream.clone(), stream_config.clone())])
+                                    .into();
                             singer_sender
                                 .send(Node::Singer(Singer::new(
                                     name,
@@ -366,7 +366,7 @@ mod tests {
                 r#"
                 {
                     "image": "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg",
-                    "streams": {"inventory_orders": "bronze.inventory.orders"},
+                    "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                     "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                     "bucket": "s3://example-postgres/",
                     "access_token": "$ACCESS_TOKEN",
@@ -429,13 +429,9 @@ mod tests {
                 .expect("Failed to create plugin"),
         );
 
-        dbg!(&dag);
-
         build_dag(&mut dag, main_diff, plugin, "main", None)
             .await
             .expect("Failed to build dag");
-
-        dbg!(&dag);
 
         assert_eq!(dag.map.len(), 1);
 
@@ -494,7 +490,7 @@ mod tests {
                 r#"
                 {
                     "image": "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg",
-                    "streams": {"inventory_orders": "bronze.inventory.orders"},
+                    "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                     "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                     "bucket": "s3://example-postgres/",
                     "access_token": "$ACCESS_TOKEN",

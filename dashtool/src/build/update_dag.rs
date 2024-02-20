@@ -53,17 +53,15 @@ pub(super) fn update_dag(diff: Diff<'_>, dag: Option<Dag>, branch: &str) -> Resu
             ))
         }?;
 
-        for (stream, table_name) in streams.iter() {
-            let name = if let JsonValue::String(object) = table_name {
-                Ok(object)
+        for (stream, stream_config) in streams.iter() {
+            let name = if let JsonValue::String(name) = &stream_config["identifier"] {
+                Ok(name)
             } else {
-                Err(Error::Text(
-                    "Streams in config must be an object.".to_string(),
-                ))
+                Err(Error::Text("Stream identifer is not a string.".to_string()))
             }?;
             let mut target_json = target_json.clone();
             target_json["streams"] =
-                Map::from_iter(vec![(stream.clone(), table_name.clone())]).into();
+                Map::from_iter(vec![(stream.clone(), stream_config.clone())]).into();
             dag.add_node(Node::Singer(Singer::new(
                 name,
                 tap_json.clone(),
@@ -141,7 +139,7 @@ mod tests {
                 r#"
                 {
                     "image": "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg",
-                    "streams": {"inventory_orders": "bronze.inventory.orders"}
+                    "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }}
                 }
                 "#
                 .as_bytes(),
@@ -231,7 +229,7 @@ mod tests {
                 r#"
                 {
                     "image": "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg",
-                    "streams": {"inventory_orders": "bronze.inventory.orders"},
+                    "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                     "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                     "bucket": "s3://example-postgres/",
                     "access_token": "$ACCESS_TOKEN",
@@ -348,7 +346,7 @@ mod tests {
                 r#"
                 {
                     "image": "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg",
-                    "streams": {"inventory_orders": "bronze.inventory.orders"},
+                    "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                     "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                     "bucket": "s3://example-postgres/",
                     "access_token": "$ACCESS_TOKEN",
