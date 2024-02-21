@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use dashtool::{
     build::build,
     error::Error,
-    plugins::{sql::SqlPlugin, Plugin},
+    plugins::{sql::SqlPlugin, Config, Plugin},
     workflow::{workflow, WORKFLOW_DIR},
 };
 
@@ -14,10 +14,6 @@ use clap::{Parser, Subcommand};
 struct Args {
     #[command(subcommand)]
     commands: Commands,
-
-    /// Plugin to execute. Available options are [dashbook, sql]. Defaults to dashbook.
-    #[arg(short, long)]
-    plugin: Option<String>,
 }
 
 #[derive(Subcommand)]
@@ -40,9 +36,13 @@ async fn main() -> Result<(), Error> {
             + "/dashtool",
     )?;
 
-    let plugin: Arc<dyn Plugin> = match args.plugin.as_deref() {
-        Some("sql") => Ok(Arc::new(SqlPlugin::new("dashtool.json").await?) as Arc<dyn Plugin>),
-        _ => Err(Error::Text("Unknown plugin".to_string())),
+    let config_json = fs::read_to_string("dashtool.json")?;
+    let config: Config = serde_json::from_str(&config_json)?;
+
+    let plugin: Arc<dyn Plugin> = match config {
+        Config::Sql(sql_config) => {
+            Ok::<_, Error>(Arc::new(SqlPlugin::new(sql_config).await?) as Arc<dyn Plugin>)
+        }
     }?;
 
     match args.commands {

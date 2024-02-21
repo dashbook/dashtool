@@ -3,7 +3,7 @@ use argo_workflow::schema::{
     VolumeMountBuilder,
 };
 use dashtool_common::ObjectStoreConfig;
-use std::{collections::HashMap, fs, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
 use async_trait::async_trait;
@@ -18,7 +18,7 @@ use super::Plugin;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Config {
+pub struct SqlConfig {
     #[serde(flatten)]
     pub object_store: ObjectStoreConfig,
     pub catalog_url: String,
@@ -32,15 +32,12 @@ pub struct Config {
 
 #[derive(Debug)]
 pub struct SqlPlugin {
-    config: Config,
+    config: SqlConfig,
     catalog_list: Arc<dyn CatalogList>,
 }
 
 impl SqlPlugin {
-    pub async fn new(path: &str) -> Result<Self, Error> {
-        let config_json = fs::read_to_string(path)?;
-        let mut config: Config = serde_json::from_str(&config_json)?;
-
+    pub async fn new(mut config: SqlConfig) -> Result<Self, Error> {
         let mut full_bucket_name = config.bucket.clone();
         let object_store: Arc<dyn ObjectStore> = match &config.object_store {
             ObjectStoreConfig::Memory => Arc::new(InMemory::new()),
@@ -79,7 +76,7 @@ impl SqlPlugin {
 #[cfg(test)]
 impl SqlPlugin {
     pub(crate) fn new_with_catalog(
-        config: Config,
+        config: SqlConfig,
         catalog_list: Arc<SqlCatalogList>,
     ) -> Result<Self, Error> {
         Ok(SqlPlugin {

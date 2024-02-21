@@ -321,7 +321,7 @@ mod tests {
         build::{build_dag::build_dag, update_dag::update_dag},
         dag::Node,
         plugins::{
-            sql::{Config, SqlPlugin},
+            sql::{SqlConfig, SqlPlugin},
             Plugin,
         },
         test::repo_init,
@@ -408,23 +408,20 @@ mod tests {
 
         let mut dag = update_dag(last_main_diff, None, "main").expect("Failed to create dag");
 
-        let config_path = temp_dir.path().join(Path::new("dashtool.json"));
-        File::create(&config_path)
-            .expect("Failed to create file")
-            .write_all(
-                r#"
+        let config_json = r#"
                 {
+                   "plugin": "sql",
 	               "catalogUrl": "sqlite://",
 	               "secrets": {}, 
                    "bucket": ""
                 }
-                "#
-                .as_bytes(),
-            )
-            .expect("Failed to write to file");
+                "#;
+
+        let config: SqlConfig =
+            serde_json::from_str(&config_json).expect("Failed to parse sql config");
 
         let plugin = Arc::new(
-            SqlPlugin::new(config_path.to_str().expect("Failed to convert path to str"))
+            SqlPlugin::new(config)
                 .await
                 .expect("Failed to create plugin"),
         );
@@ -633,7 +630,7 @@ mod tests {
 
         builder.build().await.expect("Failed to create table.");
 
-        let config: Config = serde_json::from_str(
+        let config: SqlConfig = serde_json::from_str(
             r#"
                 {
                     "catalogUrl": "sqlite://",
