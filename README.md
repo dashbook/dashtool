@@ -27,7 +27,7 @@ During the workflow execution Argo starts Docker containers that run Datafusion 
 
 ## Usage
 
-Check out the [Documentation](Documentation) for a detailed description.
+Check out the [Documentation](Documentation.md) for a detailed description.
 
 ### Build
 
@@ -57,4 +57,13 @@ kubectl apply -f argo/workflow.yaml
 
 ### Homebrew
 
+```shell
+brew tap dashbook/dashtool
+brew install dashtool
+```
+
 ### Cargo
+
+```shell
+cargo install dashtool
+```
