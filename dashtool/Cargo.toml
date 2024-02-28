@@ -10,9 +10,9 @@ license = "Apache-2.0"
 repository = "https://github.com/dashbook/dashtool"
 
 [dependencies]
-argo-workflow = { path = "../argo-workflow" }
+argo-workflow = { path = "../argo-workflow", version = "0.1" }
 clap = { version = "4.4", features = ["derive"] }
-dashtool-common = { path = "../dashtool-common/" }
+dashtool-common = { path = "../dashtool-common/", version = "0.1" }
 datafusion-iceberg-sql = "0.2"
 datafusion-sql = "36.0.0"
 datafusion-common = "36.0.0"
