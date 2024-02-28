@@ -37,7 +37,7 @@ async fn main() -> Result<(), Error> {
     )?;
 
     let config_json = fs::read_to_string("dashtool.json")?;
-    let config: Config = serde_json::from_str(&config_json)?;
+    let config: Config = serde_json::from_str(&shellexpand::env(&config_json)?)?;
 
     let plugin: Arc<dyn Plugin> = match config {
         Config::Sql(sql_config) => {

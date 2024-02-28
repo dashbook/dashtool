@@ -25,6 +25,7 @@ pub struct SqlConfig {
     pub bucket: String,
     /// A nested map that maps a kubernetes secret name to a map from a environement name to the
     /// key of the secret value in the secret.
+    #[serde(default)]
     pub secrets: HashMap<String, HashMap<String, String>>,
     #[serde(default)]
     pub env: HashMap<String, String>,

@@ -24,7 +24,7 @@ pub trait Plugin: Debug {
 }
 
 #[derive(Serialize, Deserialize)]
-#[serde(tag = "plugin")]
+#[serde(tag = "catalog", rename_all = "lowercase")]
 pub enum Config {
     Sql(SqlConfig),
 }

@@ -47,6 +47,8 @@ pub enum Error {
     #[error(transparent)]
     Parse(#[from] url::ParseError),
     #[error(transparent)]
+    Envsubst(#[from] shellexpand::LookupError<std::env::VarError>),
+    #[error(transparent)]
     StrParse(#[from] std::str::ParseBoolError),
     #[error(transparent)]
     SQLParser(#[from] sqlparser::parser::ParserError),
