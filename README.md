@@ -55,3 +55,6 @@ kubectl apply -f argo/workflow.yaml
 
 ## Installation
 
+### Homebrew
+
+### Cargo

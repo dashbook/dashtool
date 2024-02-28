@@ -8,10 +8,14 @@ use iceberg_rust::{
     catalog::tabular::Tabular as IcebergTabular, error::Error as IcebergError,
     materialized_view::materialized_view_builder::MaterializedViewBuilder, sql::find_relations,
 };
-use iceberg_rust_spec::spec::{
-    schema::SchemaBuilder,
-    snapshot::{SnapshotReference, SnapshotRetention},
-    view_metadata::{ViewProperties, REF_PREFIX},
+use iceberg_rust_spec::{
+    spec::{
+        schema::SchemaBuilder,
+        snapshot::{SnapshotReference, SnapshotRetention},
+        table_metadata::new_metadata_location,
+        view_metadata::{ViewProperties, REF_PREFIX},
+    },
+    util::strip_prefix,
 };
 use serde_json::{Map, Value as JsonValue};
 
@@ -69,7 +73,8 @@ pub(super) async fn build_dag<'repo>(
 
                         match (delta.status(), merged_branch) {
                             (Delta::Added | Delta::Modified, Some(merged_branch)) => {
-                                let tabular = catalog.load_table(&identifier.identifier()?).await?;
+                                let tabular =
+                                    catalog.load_tabular(&identifier.identifier()?).await?;
                                 let mut matview =
                                     if let IcebergTabular::MaterializedView(matview) = tabular {
                                         Ok(matview)
@@ -82,23 +87,29 @@ pub(super) async fn build_dag<'repo>(
                                 let version_id = matview.metadata().current_version_id;
                                 let mut storage_table = matview.storage_table().await?;
                                 let snapshot_id = *storage_table
-                                    .metadata()
+                                    .table_metadata
                                     .current_snapshot(Some(merged_branch))?
                                     .ok_or(Error::Iceberg(IcebergError::NotFound(
                                         "Snapshot id".to_string(),
                                         "branch".to_string() + merged_branch,
                                     )))?
                                     .snapshot_id();
-                                storage_table
-                                    .new_transaction(Some(merged_branch))
-                                    .set_snapshot_ref((
-                                        branch.to_string(),
-                                        SnapshotReference {
-                                            snapshot_id,
-                                            retention: SnapshotRetention::default(),
-                                        },
-                                    ))
-                                    .commit()
+                                storage_table.table_metadata.refs.insert(
+                                    branch.to_string(),
+                                    SnapshotReference {
+                                        snapshot_id,
+                                        retention: SnapshotRetention::default(),
+                                    },
+                                );
+                                let metaddata_location =
+                                    new_metadata_location(matview.metadata().into());
+                                matview
+                                    .object_store()
+                                    .put(
+                                        &strip_prefix(&metaddata_location).as_str().into(),
+                                        serde_json::to_string(&storage_table.table_metadata)?
+                                            .into(),
+                                    )
                                     .await?;
                                 matview
                                     .new_transaction(Some(merged_branch))
@@ -106,6 +117,7 @@ pub(super) async fn build_dag<'repo>(
                                         REF_PREFIX.to_string() + branch,
                                         version_id.to_string(),
                                     )])
+                                    .update_materialization(&metaddata_location)
                                     .commit()
                                     .await?;
                             }
@@ -155,7 +167,7 @@ pub(super) async fn build_dag<'repo>(
                                 )?;
                                 builder.location(&base_path);
                                 builder.properties(ViewProperties {
-                                    storage_table: Default::default(),
+                                    metadata_location: Default::default(),
                                     other: HashMap::from_iter(vec![(
                                         REF_PREFIX.to_string() + branch,
                                         1.to_string(),
@@ -208,7 +220,8 @@ pub(super) async fn build_dag<'repo>(
                                     ),
                                 )?;
 
-                                let tabular = catalog.load_table(&identifier.identifier()?).await?;
+                                let tabular =
+                                    catalog.load_tabular(&identifier.identifier()?).await?;
 
                                 let mut table = if let IcebergTabular::Table(table) = tabular {
                                     Ok(table)
@@ -310,10 +323,7 @@ mod tests {
     use crate::{
         build::{build_dag::build_dag, update_dag::update_dag},
         dag::Node,
-        plugins::{
-            sql::{SqlConfig, SqlPlugin},
-            Plugin,
-        },
+        plugins::{sql::SqlPlugin, Config, Plugin},
         test::repo_init,
     };
 
@@ -407,8 +417,9 @@ mod tests {
                 }
                 "#;
 
-        let config: SqlConfig =
-            serde_json::from_str(&config_json).expect("Failed to parse sql config");
+        let config = match serde_json::from_str(&config_json).expect("Failed to parse sql config") {
+            Config::Sql(config) => config,
+        };
 
         let plugin = Arc::new(
             SqlPlugin::new(config)
@@ -620,16 +631,20 @@ mod tests {
 
         builder.build().await.expect("Failed to create table.");
 
-        let config: SqlConfig = serde_json::from_str(
+        let config = match serde_json::from_str(
             r#"
                 {
+                    "plugin": "sql
                     "catalogUrl": "sqlite://",
                     "bucket": "test",
                     "secrets": {} 
                 }
                 "#,
         )
-        .expect("Failed to parse config");
+        .expect("Failed to parse sql config")
+        {
+            Config::Sql(config) => config,
+        };
 
         let plugin = Arc::new(
             SqlPlugin::new_with_catalog(config, catalog_list).expect("Failed to create plugin"),
@@ -663,7 +678,7 @@ mod tests {
             .expect("Failed to get catalog");
 
         let matview = if let Tabular::MaterializedView(matview) = catalog
-            .load_table(
+            .load_tabular(
                 &Identifier::parse("inventory.factOrder").expect("Failed to parse identifier"),
             )
             .await

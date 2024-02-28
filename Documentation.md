@@ -31,16 +31,15 @@ kubectl apply -f argo/workflow.yaml
 ## Configuration
 
 Dashtool uses the `dashtool.json` file to store connection and authentication parameters for the current project.
-The configuration file has two sections, one for the Iceberg catalog and one for the cloud provider.
-
-### Catalog
-
-The catalog section of the configuration file contains parameters related to the Iceberg catalog.
-The field "catalog" defines which catalog to use.
+It uses a plugin system to support different Icebergs catalogs and cloud providers. The "plugin" field specifies which plugin to use.
 
 | Field | Type | Description |
 | --- | --- | --- |
-| **catalog** | String | Name of the catalog. Can be: "sql" |
+| **plugin** | String | Name of the plugin. Can be: "sql" |
+
+### Sql plugin
+
+The configuration file for the Sql plugin has two sections, one for the Iceberg catalog and one for the cloud provider.
 
 #### Sql catalog
 
