@@ -634,7 +634,7 @@ mod tests {
         let config = match serde_json::from_str(
             r#"
                 {
-                    "plugin": "sql
+                    "plugin": "sql",
                     "catalogUrl": "sqlite://",
                     "bucket": "test",
                     "secrets": {} 
