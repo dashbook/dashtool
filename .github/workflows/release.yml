@@ -12,21 +12,21 @@ jobs:
         include:
           - target: x86_64-pc-windows-gnu
             archive: zip
-            flags: ""
+            static: true
           - target: x86_64-unknown-linux-musl
             archive: tar.gz tar.xz tar.zst
-            flags: "-Ctarget-feature=-crt-static"
+            static: false
           - target: x86_64-apple-darwin
             archive: tar.gz
-            flags: ""
+            static: false
     steps:
       - uses: actions/checkout@master
       - name: Compile and release
         uses: rust-build/rust-build.action@v1.4.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUSTFLAGS: ${{ matrix.flags }}
         with:
           RUSTTARGET: ${{ matrix.target }}
           ARCHIVE_TYPES: ${{ matrix.archive }}
           SRC_DIR: dashtool
+          STATIC_LINKING: ${{ matrix.static }}
