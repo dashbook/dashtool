@@ -9,7 +9,6 @@ use argo_workflow::schema::{
     DagTemplateBuilder, IoArgoprojWorkflowV1alpha1Template, ObjectMetaBuilder, ParameterBuilder,
     TemplateBuilder, WorkflowSpecBuilder,
 };
-use git2::Repository;
 use k8s_openapi::api::core::v1::ConfigMap;
 use petgraph::Direction;
 
@@ -28,7 +27,7 @@ static API_VERSION: &str = "argoproj.io/v1alpha1";
 pub static WORKFLOW_DIR: &str = "argo";
 
 pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
-    let repo = Repository::open(".")?;
+    let repo = gix::discover(".")?;
     let branch = branch(&repo)?;
 
     let dag = get_dag(&branch)?;

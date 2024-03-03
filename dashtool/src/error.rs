@@ -21,7 +21,23 @@ pub enum Error {
     #[error(transparent)]
     IcebergSqlCatalog(#[from] iceberg_catalog_sql::error::Error),
     #[error(transparent)]
-    Git(#[from] git2::Error),
+    GitDiscover(#[from] gix::discover::Error),
+    #[error(transparent)]
+    GitReference(#[from] gix::reference::find::Error),
+    #[error(transparent)]
+    GitReferenceExisting(#[from] gix::reference::find::existing::Error),
+    #[error(transparent)]
+    GitObject(#[from] gix::object::find::Error),
+    #[error(transparent)]
+    GitChanges(#[from] gix::diff::tree::changes::Error),
+    #[error(transparent)]
+    GitObjectDecode(#[from] gix::objs::decode::Error),
+    #[error(transparent)]
+    GitObjectTryInto(#[from] gix::object::try_into::Error),
+    #[error(transparent)]
+    GitRecorder(#[from] Box<dyn std::error::Error + Send + Sync>),
+    #[error(transparent)]
+    Utf8(#[from] std::string::FromUtf8Error),
     #[error(transparent)]
     OIDCDiscovery(
         #[from] openidconnect::DiscoveryError<openidconnect::reqwest::Error<reqwest::Error>>,

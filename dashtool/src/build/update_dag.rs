@@ -1,7 +1,7 @@
-use std::{ffi::OsStr, fs, path::Path};
+use std::{fs, path::Path};
 
 use anyhow::anyhow;
-use git2::{Delta, Diff};
+use gix::diff::tree::recorder::Change;
 use iceberg_rust::sql::find_relations;
 use serde_json::{Map, Value as JsonValue};
 
@@ -11,34 +11,31 @@ use crate::{
 };
 
 // Converts the commits into a dag without performing any operations on the tables
-pub(super) fn update_dag(diff: Diff<'_>, dag: Option<Dag>, branch: &str) -> Result<Dag, Error> {
+pub(super) fn update_dag(diff: &[Change], dag: Option<Dag>, branch: &str) -> Result<Dag, Error> {
     let mut dag = dag.unwrap_or(Dag::new());
 
     let mut singers = Vec::new();
     let mut tabulars = Vec::new();
 
-    for delta in diff.deltas() {
-        let path = delta
-            .new_file()
-            .path()
-            .ok_or(Error::Text("No new file in delta".to_string()))?;
-        let is_tabular = if path.extension() == Some(OsStr::new("sql")) {
-            Some(true)
-        } else if path.ends_with("target.json") {
-            Some(false)
-        } else {
-            None
-        };
-        match (delta.status(), is_tabular) {
-            (Delta::Added, Some(true)) => tabulars.push(path),
-            (Delta::Added, Some(false)) => singers.push(path),
-            (Delta::Added, None) => (),
+    for delta in diff {
+        match delta {
+            Change::Addition {
+                entry_mode: _,
+                oid: _,
+                path,
+            } => {
+                if path.ends_with(b".sql") {
+                    tabulars.push(String::from_utf8(path.as_slice().to_owned())?)
+                } else if path.ends_with(b"target.json") {
+                    singers.push(String::from_utf8(path.as_slice().to_owned())?)
+                };
+            }
             _ => (),
         }
     }
 
     for path in singers {
-        let parent_path = Path::new(path).parent().ok_or(Error::Anyhow(anyhow!(
+        let parent_path = Path::new(&path).parent().ok_or(Error::Anyhow(anyhow!(
             "target.json must be inside a subfolder."
         )))?;
         let tap_path = parent_path.join("tap.json");
@@ -72,11 +69,11 @@ pub(super) fn update_dag(diff: Diff<'_>, dag: Option<Dag>, branch: &str) -> Resu
     }
 
     for path in tabulars {
-        let sql = fs::read_to_string(path)?;
+        let sql = fs::read_to_string(&path)?;
 
         let children = find_relations(&sql)?;
 
-        let identifier = FullIdentifier::parse_path(path)?.to_string();
+        let identifier = FullIdentifier::parse_path(Path::new(&path))?.to_string();
 
         dag.add_node(Node::Tabular(Tabular::new(&identifier, branch, &sql)));
 
@@ -96,13 +93,14 @@ mod tests {
         path::Path,
     };
 
-    use git2::DiffOptions;
+    use gix::{diff::tree::recorder::Change, objs::tree::EntryKind, ObjectId};
+    use tempfile::TempDir;
 
-    use crate::{build::update_dag::update_dag, dag::Node, test::repo_init};
+    use crate::{build::update_dag::update_dag, dag::Node};
 
     #[test]
     fn add_singer() {
-        let (temp_dir, repo) = repo_init();
+        let temp_dir = TempDir::new().unwrap();
 
         env::set_current_dir(temp_dir.path()).expect("Failed to set current work dir");
         std::env::current_dir().expect("Failed to sync workdir");
@@ -146,32 +144,24 @@ mod tests {
             )
             .expect("Failed to write to file");
 
-        let mut opts = DiffOptions::new();
-        opts.include_untracked(true);
+        let changes = vec![
+            Change::Addition {
+                entry_mode: EntryKind::Tree
+                    .try_into()
+                    .expect("Failed to create git entry"),
+                oid: ObjectId::null(gix::hash::Kind::Sha1),
+                path: tap_path.to_str().unwrap().into(),
+            },
+            Change::Addition {
+                entry_mode: EntryKind::Tree
+                    .try_into()
+                    .expect("Failed to create git entry"),
+                oid: ObjectId::null(gix::hash::Kind::Sha1),
+                path: target_path.to_str().unwrap().into(),
+            },
+        ];
 
-        let mut index = repo.index().expect("Failed to create index");
-        index
-            .add_path(
-                tap_path
-                    .as_path()
-                    .strip_prefix(temp_dir.path())
-                    .expect("Failed to get relative path of file"),
-            )
-            .expect("Failed to add path to index");
-        index
-            .add_path(
-                target_path
-                    .as_path()
-                    .strip_prefix(temp_dir.path())
-                    .expect("Failed to get relative path of file"),
-            )
-            .expect("Failed to add path to index");
-
-        let diff = repo
-            .diff_tree_to_index(None, Some(&index), Some(&mut opts))
-            .expect("Failed to create diff for repo");
-
-        let dag = update_dag(diff, None, "main").expect("Failed to create dag");
+        let dag = update_dag(&changes, None, "main").expect("Failed to create dag");
 
         assert_eq!(dag.map.len(), 1);
 
@@ -192,7 +182,7 @@ mod tests {
 
     #[test]
     fn add_tabular() {
-        let (temp_dir, repo) = repo_init();
+        let temp_dir = TempDir::new().unwrap();
 
         env::set_current_dir(temp_dir.path()).expect("Failed to set current work dir");
         std::env::current_dir().expect("Failed to sync workdir");
@@ -239,27 +229,6 @@ mod tests {
                 .as_bytes(),
             )
             .expect("Failed to write to file");
-
-        let mut opts = DiffOptions::new();
-        opts.include_untracked(true);
-
-        let mut index = repo.index().expect("Failed to create index");
-        index
-            .add_path(
-                tap_path
-                    .as_path()
-                    .strip_prefix(temp_dir.path())
-                    .expect("Failed to get relative path of file"),
-            )
-            .expect("Failed to add path to index");
-        index
-            .add_path(
-                target_path
-                    .as_path()
-                    .strip_prefix(temp_dir.path())
-                    .expect("Failed to get relative path of file"),
-            )
-            .expect("Failed to add path to index");
 
         let silver_path = temp_dir.path().join("silver");
         fs::create_dir(&silver_path).expect("Failed to create directory");
@@ -278,20 +247,31 @@ mod tests {
             )
             .expect("Failed to write to file");
 
-        index
-            .add_path(
-                tabular_path
-                    .as_path()
-                    .strip_prefix(temp_dir.path())
-                    .expect("Failed to get relative path of file"),
-            )
-            .expect("Failed to add path to index");
+        let changes = vec![
+            Change::Addition {
+                entry_mode: EntryKind::Tree
+                    .try_into()
+                    .expect("Failed to create git entry"),
+                oid: ObjectId::null(gix::hash::Kind::Sha1),
+                path: tap_path.to_str().unwrap().into(),
+            },
+            Change::Addition {
+                entry_mode: EntryKind::Tree
+                    .try_into()
+                    .expect("Failed to create git entry"),
+                oid: ObjectId::null(gix::hash::Kind::Sha1),
+                path: target_path.to_str().unwrap().into(),
+            },
+            Change::Addition {
+                entry_mode: EntryKind::Tree
+                    .try_into()
+                    .expect("Failed to create git entry"),
+                oid: ObjectId::null(gix::hash::Kind::Sha1),
+                path: tabular_path.to_str().unwrap().into(),
+            },
+        ];
 
-        let diff = repo
-            .diff_tree_to_index(None, Some(&index), Some(&mut opts))
-            .expect("Failed to create diff for repo");
-
-        let dag = update_dag(diff, None, "main").expect("Failed to create dag");
+        let dag = update_dag(&changes, None, "main").expect("Failed to create dag");
 
         assert_eq!(dag.map.len(), 2);
 
@@ -309,7 +289,7 @@ mod tests {
 
     #[test]
     fn add_singer_branch() {
-        let (temp_dir, repo) = repo_init();
+        let temp_dir = TempDir::new().unwrap();
 
         env::set_current_dir(temp_dir.path()).expect("Failed to set current work dir");
         std::env::current_dir().expect("Failed to sync workdir");
@@ -357,32 +337,24 @@ mod tests {
             )
             .expect("Failed to write to file");
 
-        let mut opts = DiffOptions::new();
-        opts.include_untracked(true);
+        let changes = vec![
+            Change::Addition {
+                entry_mode: EntryKind::Tree
+                    .try_into()
+                    .expect("Failed to create git entry"),
+                oid: ObjectId::null(gix::hash::Kind::Sha1),
+                path: tap_path.to_str().unwrap().into(),
+            },
+            Change::Addition {
+                entry_mode: EntryKind::Tree
+                    .try_into()
+                    .expect("Failed to create git entry"),
+                oid: ObjectId::null(gix::hash::Kind::Sha1),
+                path: target_path.to_str().unwrap().into(),
+            },
+        ];
 
-        let mut index = repo.index().expect("Failed to create index");
-        index
-            .add_path(
-                tap_path
-                    .as_path()
-                    .strip_prefix(temp_dir.path())
-                    .expect("Failed to get relative path of file"),
-            )
-            .expect("Failed to add path to index");
-        index
-            .add_path(
-                target_path
-                    .as_path()
-                    .strip_prefix(temp_dir.path())
-                    .expect("Failed to get relative path of file"),
-            )
-            .expect("Failed to add path to index");
-
-        let diff = repo
-            .diff_tree_to_index(None, Some(&index), Some(&mut opts))
-            .expect("Failed to create diff for repo");
-
-        let dag = update_dag(diff, None, "expenditures").expect("Failed to create dag");
+        let dag = update_dag(&changes, None, "expenditures").expect("Failed to create dag");
 
         assert_eq!(dag.map.len(), 1);
 

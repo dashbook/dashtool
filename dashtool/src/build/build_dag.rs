@@ -1,9 +1,9 @@
-use std::{collections::HashMap, ffi::OsStr, fs, path::Path, sync::Arc};
+use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
 use anyhow::anyhow;
 use datafusion_iceberg_sql::schema::get_schema;
 use futures::{channel::mpsc::unbounded, stream, SinkExt, StreamExt, TryStreamExt};
-use git2::{Delta, Diff};
+use gix::diff::tree::recorder::Change;
 use iceberg_rust::{
     catalog::tabular::Tabular as IcebergTabular, error::Error as IcebergError,
     materialized_view::materialized_view_builder::MaterializedViewBuilder, sql::find_relations,
@@ -28,7 +28,7 @@ use crate::{
 // Converts commits into a dag and performs the according transactions on the tables
 pub(super) async fn build_dag<'repo>(
     dag: &mut Dag,
-    diff: Diff<'repo>,
+    diff: &[Change],
     plugin: Arc<dyn Plugin>,
     branch: &str,
     merged_branch: Option<&str>,
@@ -38,20 +38,36 @@ pub(super) async fn build_dag<'repo>(
 
     let catalog_list = plugin.catalog_list().await?;
 
-    stream::iter(diff.deltas())
+    stream::iter(diff)
         .map(Ok::<_, Error>)
-        .try_for_each(|delta| {
+        .try_for_each(|change| {
             let plugin = plugin.clone();
             let catalog_list = catalog_list.clone();
 
             let mut tabular_sender = tabular_sender.clone();
             let mut singer_sender = singer_sender.clone();
             async move {
-                let path = delta
-                    .new_file()
-                    .path()
-                    .ok_or(Error::Text("No new file in delta".to_string()))?;
-                let is_tabular = if path.extension() == Some(OsStr::new("sql")) {
+                let path = match &change {
+                    Change::Addition {
+                        entry_mode: _,
+                        oid: _,
+                        path,
+                    } => path,
+                    Change::Deletion {
+                        entry_mode: _,
+                        oid: _,
+                        path,
+                    } => path,
+                    Change::Modification {
+                        previous_entry_mode: _,
+                        previous_oid: _,
+                        entry_mode: _,
+                        oid: _,
+                        path,
+                    } => path,
+                }
+                .to_string();
+                let is_tabular = if path.ends_with(".sql") {
                     Some(true)
                 } else if path.ends_with("target.json") {
                     Some(false)
@@ -60,7 +76,7 @@ pub(super) async fn build_dag<'repo>(
                 };
                 match is_tabular {
                     Some(true) => {
-                        let identifier = FullIdentifier::parse_path(path)?;
+                        let identifier = FullIdentifier::parse_path(&Path::new(&path))?;
 
                         let catalog_name = identifier.catalog_name();
 
@@ -68,11 +84,25 @@ pub(super) async fn build_dag<'repo>(
                             IcebergError::NotFound("Catalog".to_string(), catalog_name.to_string()),
                         )?;
 
-                        let sql = fs::read_to_string(path)?;
+                        let sql = fs::read_to_string(&path)?;
                         let relations = find_relations(&sql)?;
 
-                        match (delta.status(), merged_branch) {
-                            (Delta::Added | Delta::Modified, Some(merged_branch)) => {
+                        match (change, merged_branch) {
+                            (
+                                Change::Addition {
+                                    entry_mode: _,
+                                    oid: _,
+                                    path: _,
+                                }
+                                | Change::Modification {
+                                    previous_entry_mode: _,
+                                    previous_oid: _,
+                                    entry_mode: _,
+                                    oid: _,
+                                    path: _,
+                                },
+                                Some(merged_branch),
+                            ) => {
                                 let tabular =
                                     catalog.load_tabular(&identifier.identifier()?).await?;
                                 let mut matview =
@@ -121,7 +151,14 @@ pub(super) async fn build_dag<'repo>(
                                     .commit()
                                     .await?;
                             }
-                            (Delta::Added, None) => {
+                            (
+                                Change::Addition {
+                                    entry_mode: _,
+                                    oid: _,
+                                    path: _,
+                                },
+                                None,
+                            ) => {
                                 let relations = relations
                                     .iter()
                                     .map(|x| {
@@ -155,8 +192,7 @@ pub(super) async fn build_dag<'repo>(
                                     .to_string()
                                     + "/"
                                     + path
-                                        .to_str()
-                                        .ok_or(Error::Text("No new file in delta".to_string()))?
+                                        .as_str()
                                         .trim_start_matches('/')
                                         .trim_end_matches(".sql");
                                 let mut builder = MaterializedViewBuilder::new(
@@ -183,7 +219,7 @@ pub(super) async fn build_dag<'repo>(
                             .await?;
                     }
                     Some(false) => {
-                        let parent_path = Path::new(path).parent().ok_or(Error::Anyhow(
+                        let parent_path = Path::new(&path).parent().ok_or(Error::Anyhow(
                             anyhow!("target.json must be inside a subfolder."),
                         ))?;
                         let tap_path = parent_path.join("tap.json");
@@ -307,7 +343,7 @@ mod tests {
         sync::Arc,
     };
 
-    use git2::DiffOptions;
+    use gix::{diff::tree::recorder::Change, objs::tree::EntryKind, ObjectId};
     use iceberg_catalog_sql::SqlCatalogList;
     use iceberg_rust::{
         catalog::{identifier::Identifier, tabular::Tabular, CatalogList},
@@ -319,17 +355,17 @@ mod tests {
         types::{PrimitiveType, StructField, StructTypeBuilder, Type},
     };
     use object_store::memory::InMemory;
+    use tempfile::TempDir;
 
     use crate::{
         build::{build_dag::build_dag, update_dag::update_dag},
         dag::Node,
         plugins::{sql::SqlPlugin, Config, Plugin},
-        test::repo_init,
     };
 
     #[tokio::test]
     async fn add_singer() {
-        let (temp_dir, repo) = repo_init();
+        let temp_dir = TempDir::new().unwrap();
 
         env::set_current_dir(temp_dir.path()).expect("Failed to set current work dir");
         std::env::current_dir().expect("Failed to sync workdir");
@@ -377,36 +413,24 @@ mod tests {
             )
             .expect("Failed to write to file");
 
-        let mut opts = DiffOptions::new();
-        opts.include_untracked(true);
+        let changes = vec![
+            Change::Addition {
+                entry_mode: EntryKind::Tree
+                    .try_into()
+                    .expect("Failed to create git entry"),
+                oid: ObjectId::null(gix::hash::Kind::Sha1),
+                path: tap_path.to_str().unwrap().into(),
+            },
+            Change::Addition {
+                entry_mode: EntryKind::Tree
+                    .try_into()
+                    .expect("Failed to create git entry"),
+                oid: ObjectId::null(gix::hash::Kind::Sha1),
+                path: target_path.to_str().unwrap().into(),
+            },
+        ];
 
-        let mut index = repo.index().expect("Failed to create index");
-        index
-            .add_path(
-                tap_path
-                    .as_path()
-                    .strip_prefix(temp_dir.path())
-                    .expect("Failed to get relative path of file"),
-            )
-            .expect("Failed to add path to index");
-        index
-            .add_path(
-                target_path
-                    .as_path()
-                    .strip_prefix(temp_dir.path())
-                    .expect("Failed to get relative path of file"),
-            )
-            .expect("Failed to add path to index");
-
-        let last_main_diff = repo
-            .diff_tree_to_tree(None, None, None)
-            .expect("Failed to create diff for repo");
-
-        let main_diff = repo
-            .diff_tree_to_index(None, Some(&index), Some(&mut opts))
-            .expect("Failed to create diff for repo");
-
-        let mut dag = update_dag(last_main_diff, None, "main").expect("Failed to create dag");
+        let mut dag = update_dag(&vec![], None, "main").expect("Failed to create dag");
 
         let config_json = r#"
                 {
@@ -427,7 +451,7 @@ mod tests {
                 .expect("Failed to create plugin"),
         );
 
-        build_dag(&mut dag, main_diff, plugin, "main", None)
+        build_dag(&mut dag, &changes, plugin, "main", None)
             .await
             .expect("Failed to build dag");
 
@@ -451,7 +475,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_tabular() {
-        let (temp_dir, repo) = repo_init();
+        let temp_dir = TempDir::new().unwrap();
 
         env::set_current_dir(temp_dir.path()).expect("Failed to set current work dir");
         std::env::current_dir().expect("Failed to sync workdir");
@@ -499,27 +523,6 @@ mod tests {
             )
             .expect("Failed to write to file");
 
-        let mut opts = DiffOptions::new();
-        opts.include_untracked(true);
-
-        let mut index = repo.index().expect("Failed to create index");
-        index
-            .add_path(
-                tap_path
-                    .as_path()
-                    .strip_prefix(temp_dir.path())
-                    .expect("Failed to get relative path of file"),
-            )
-            .expect("Failed to add path to index");
-        index
-            .add_path(
-                target_path
-                    .as_path()
-                    .strip_prefix(temp_dir.path())
-                    .expect("Failed to get relative path of file"),
-            )
-            .expect("Failed to add path to index");
-
         let silver_path = temp_dir.path().join("silver");
         fs::create_dir(&silver_path).expect("Failed to create directory");
 
@@ -537,24 +540,31 @@ mod tests {
             )
             .expect("Failed to write to file");
 
-        index
-            .add_path(
-                tabular_path
-                    .as_path()
-                    .strip_prefix(temp_dir.path())
-                    .expect("Failed to get relative path of file"),
-            )
-            .expect("Failed to add path to index");
+        let changes = vec![
+            Change::Addition {
+                entry_mode: EntryKind::Tree
+                    .try_into()
+                    .expect("Failed to create git entry"),
+                oid: ObjectId::null(gix::hash::Kind::Sha1),
+                path: tap_path.to_str().unwrap().into(),
+            },
+            Change::Addition {
+                entry_mode: EntryKind::Tree
+                    .try_into()
+                    .expect("Failed to create git entry"),
+                oid: ObjectId::null(gix::hash::Kind::Sha1),
+                path: target_path.to_str().unwrap().into(),
+            },
+            Change::Addition {
+                entry_mode: EntryKind::Tree
+                    .try_into()
+                    .expect("Failed to create git entry"),
+                oid: ObjectId::null(gix::hash::Kind::Sha1),
+                path: tabular_path.to_str().unwrap().into(),
+            },
+        ];
 
-        let last_main_diff = repo
-            .diff_tree_to_tree(None, None, None)
-            .expect("Failed to create diff for repo");
-
-        let main_diff = repo
-            .diff_tree_to_index(None, Some(&index), Some(&mut opts))
-            .expect("Failed to create diff for repo");
-
-        let mut dag = update_dag(last_main_diff, None, "main").expect("Failed to create dag");
+        let mut dag = update_dag(&vec![], None, "main").expect("Failed to create dag");
 
         let object_store = Arc::new(InMemory::new());
 
@@ -650,7 +660,7 @@ mod tests {
             SqlPlugin::new_with_catalog(config, catalog_list).expect("Failed to create plugin"),
         );
 
-        build_dag(&mut dag, main_diff, plugin.clone(), "main", None)
+        build_dag(&mut dag, &changes, plugin.clone(), "main", None)
             .await
             .expect("Failed to build dag");
 

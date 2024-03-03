@@ -1,7 +1,5 @@
 use std::{fs, sync::Arc};
 
-use git2::{BranchType, Repository};
-
 use crate::{
     error::Error,
     git::{branch, diff},
@@ -21,20 +19,23 @@ pub async fn build(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
         .unwrap_or_default();
 
     // Inspect git repo
-    let repo = Repository::open(".")?;
+    let repo = gix::discover(".")?;
+    let db = gix::odb::at(".git/objects")?;
 
     // Name of the currently selected branch in the git repo
     let current_branch = branch(&repo)?;
 
     let current_id = repo
-        .find_branch(&current_branch, BranchType::Local)?
-        .into_reference()
-        .target();
+        .try_find_reference(&current_branch)?
+        .map(|x| x.target().into_owned().try_into_id())
+        .transpose()
+        .unwrap();
 
     let main_id = repo
-        .find_branch("main", BranchType::Local)?
-        .into_reference()
-        .target();
+        .try_find_reference("main")?
+        .map(|x| x.target().into_owned().try_into_id())
+        .transpose()
+        .unwrap();
 
     // Id of the last commit on the current brranch that was built with dashtool
     let last_id = state.commits.get(&current_branch).cloned();
@@ -56,28 +57,28 @@ pub async fn build(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
         .map(|(k, _)| k)
         .cloned();
 
-    let last_main_diff = diff(&repo, &None, &last_main_id)?;
+    let last_main_diff = diff(&db, &None, &last_main_id)?;
 
-    let mut dag = update_dag(last_main_diff, None, "main")?;
+    let mut dag = update_dag(&last_main_diff, None, "main")?;
 
-    let main_diff = diff(&repo, &last_main_id, &main_id)?;
+    let main_diff = diff(&db, &last_main_id, &main_id)?;
 
     build_dag(
         &mut dag,
-        main_diff,
+        &main_diff,
         plugin.clone(),
         "main",
         merged_branch.as_deref(),
     )
     .await?;
 
-    let last_diff = diff(&repo, &main_id, &last_id)?;
+    let last_diff = diff(&db, &main_id, &last_id)?;
 
-    let mut dag = update_dag(last_diff, Some(dag), &current_branch)?;
+    let mut dag = update_dag(&last_diff, Some(dag), &current_branch)?;
 
-    let diff = diff(&repo, &last_id.or(main_id), &current_id)?;
+    let diff = diff(&db, &last_id.or(main_id), &current_id)?;
 
-    build_dag(&mut dag, diff, plugin.clone(), &current_branch, None).await?;
+    build_dag(&mut dag, &diff, plugin.clone(), &current_branch, None).await?;
 
     let json = serde_json::to_string(&dag)?;
 

@@ -41,22 +41,7 @@ impl FullIdentifier {
     }
 
     pub(crate) fn parse_path(input: &Path) -> Result<Self, Error> {
-        let mut parts = input.iter();
-        let catalog_name = parts
-            .next()
-            .ok_or(Error::Text("Input is empty".to_string()))?
-            .to_str()
-            .ok_or(Error::Text("Failed to convert OsStr".to_string()))?
-            .to_owned();
-        let namespace_name = parts
-            .next()
-            .ok_or(Error::Text(format!(
-                "Identifier {:?} has only one part",
-                input
-            )))?
-            .to_str()
-            .ok_or(Error::Text("Failed to convert OsStr".to_string()))?
-            .to_owned();
+        let mut parts = input.iter().rev();
         let table_name = parts
             .next()
             .ok_or(Error::Text(format!(
@@ -67,6 +52,21 @@ impl FullIdentifier {
             .ok_or(Error::Text("Failed to convert OsStr".to_string()))?
             .trim_end_matches(".sql")
             .trim_end_matches(".json")
+            .to_owned();
+        let namespace_name = parts
+            .next()
+            .ok_or(Error::Text(format!(
+                "Identifier {:?} has only one part",
+                input
+            )))?
+            .to_str()
+            .ok_or(Error::Text("Failed to convert OsStr".to_string()))?
+            .to_owned();
+        let catalog_name = parts
+            .next()
+            .ok_or(Error::Text("Input is empty".to_string()))?
+            .to_str()
+            .ok_or(Error::Text("Failed to convert OsStr".to_string()))?
             .to_owned();
         Ok(FullIdentifier {
             catalog_name,
