@@ -11,7 +11,7 @@ repository = "https://github.com/dashbook/dashtool"
 
 [dependencies]
 argo-workflow = "0.1"
-clap = { version = "4.4", features = ["derive"] }
+clap = { version = "=4.4", features = ["derive"] }
 dashtool-common = "0.1"
 datafusion-iceberg-sql = "0.2"
 datafusion-sql = "36.0.0"
