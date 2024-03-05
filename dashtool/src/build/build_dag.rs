@@ -344,7 +344,6 @@ mod tests {
     };
 
     use gix::{diff::tree::recorder::Change, objs::tree::EntryKind, ObjectId};
-    use iceberg_catalog_sql::SqlCatalogList;
     use iceberg_rust::{
         catalog::{identifier::Identifier, tabular::Tabular, CatalogList},
         table::table_builder::TableBuilder,
@@ -354,6 +353,7 @@ mod tests {
         schema::SchemaBuilder,
         types::{PrimitiveType, StructField, StructTypeBuilder, Type},
     };
+    use iceberg_sql_catalog::SqlCatalogList;
     use object_store::memory::InMemory;
     use tempfile::TempDir;
 
