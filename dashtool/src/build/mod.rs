@@ -72,13 +72,20 @@ pub async fn build(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
     )
     .await?;
 
-    let last_diff = diff(&db, &main_id, &last_id)?;
+    // Only apply other changes if not on main branch
+    let dag = if current_id != main_id {
+        let last_diff = diff(&db, &main_id, &last_id)?;
 
-    let mut dag = update_dag(&last_diff, Some(dag), &current_branch)?;
+        let mut dag = update_dag(&last_diff, Some(dag), &current_branch)?;
 
-    let diff = diff(&db, &last_id.or(main_id), &current_id)?;
+        let diff = diff(&db, &last_id.or(main_id), &current_id)?;
 
-    build_dag(&mut dag, &diff, plugin.clone(), &current_branch, None).await?;
+        build_dag(&mut dag, &diff, plugin.clone(), &current_branch, None).await?;
+
+        dag
+    } else {
+        dag
+    };
 
     let json = serde_json::to_string(&dag)?;
 
