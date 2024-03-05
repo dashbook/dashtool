@@ -18,7 +18,7 @@ datafusion-sql = "36.0.0"
 datafusion-common = "36.0.0"
 iceberg-rust = "0.2"
 iceberg-rust-spec = "0.2"
-iceberg-catalog-sql = "0.2"
+iceberg-sql-catalog = "0.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlparser = { version = "0.43", features = ["visitor"] }

@@ -7,8 +7,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
 use async_trait::async_trait;
-use iceberg_catalog_sql::SqlCatalogList;
 use iceberg_rust::catalog::CatalogList;
+use iceberg_sql_catalog::SqlCatalogList;
 use object_store::{aws::AmazonS3Builder, memory::InMemory, ObjectStore};
 use serde::{Deserialize, Serialize};
 

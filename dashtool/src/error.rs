@@ -19,7 +19,7 @@ pub enum Error {
     #[error(transparent)]
     IcebergSpec(#[from] iceberg_rust_spec::error::Error),
     #[error(transparent)]
-    IcebergSqlCatalog(#[from] iceberg_catalog_sql::error::Error),
+    IcebergSqlCatalog(#[from] iceberg_sql_catalog::error::Error),
     #[error(transparent)]
     GitDiscover(#[from] gix::discover::Error),
     #[error(transparent)]
