@@ -23,7 +23,7 @@ During the workflow execution Argo starts Docker containers that run Datafusion 
 
 ## Examples
 
-- [Postgres example](https://github.com/dashbook/dashtool-postgres-example)
+- [Postgres example](https://killercoda.com/dashbook/scenario/dashtool-postgres)
 
 ## Usage
 
