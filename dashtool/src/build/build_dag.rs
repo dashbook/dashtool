@@ -8,14 +8,10 @@ use iceberg_rust::{
     catalog::tabular::Tabular as IcebergTabular, error::Error as IcebergError,
     materialized_view::materialized_view_builder::MaterializedViewBuilder, sql::find_relations,
 };
-use iceberg_rust_spec::{
-    spec::{
-        schema::SchemaBuilder,
-        snapshot::{SnapshotReference, SnapshotRetention},
-        table_metadata::new_metadata_location,
-        view_metadata::{ViewProperties, REF_PREFIX},
-    },
-    util::strip_prefix,
+use iceberg_rust_spec::spec::{
+    schema::SchemaBuilder,
+    snapshot::{SnapshotReference, SnapshotRetention},
+    view_metadata::{ViewProperties, REF_PREFIX},
 };
 use serde_json::{Map, Value as JsonValue};
 
@@ -117,29 +113,23 @@ pub(super) async fn build_dag<'repo>(
                                 let version_id = matview.metadata().current_version_id;
                                 let mut storage_table = matview.storage_table().await?;
                                 let snapshot_id = *storage_table
-                                    .table_metadata
+                                    .metadata()
                                     .current_snapshot(Some(merged_branch))?
                                     .ok_or(Error::Iceberg(IcebergError::NotFound(
                                         "Snapshot id".to_string(),
                                         "branch".to_string() + merged_branch,
                                     )))?
                                     .snapshot_id();
-                                storage_table.table_metadata.refs.insert(
-                                    branch.to_string(),
-                                    SnapshotReference {
-                                        snapshot_id,
-                                        retention: SnapshotRetention::default(),
-                                    },
-                                );
-                                let metaddata_location =
-                                    new_metadata_location(matview.metadata().into());
-                                matview
-                                    .object_store()
-                                    .put(
-                                        &strip_prefix(&metaddata_location).as_str().into(),
-                                        serde_json::to_string(&storage_table.table_metadata)?
-                                            .into(),
-                                    )
+                                storage_table
+                                    .new_transaction(Some(merged_branch))
+                                    .set_snapshot_ref((
+                                        branch.to_string(),
+                                        SnapshotReference {
+                                            snapshot_id,
+                                            retention: SnapshotRetention::default(),
+                                        },
+                                    ))
+                                    .commit()
                                     .await?;
                                 matview
                                     .new_transaction(Some(merged_branch))
@@ -147,7 +137,6 @@ pub(super) async fn build_dag<'repo>(
                                         REF_PREFIX.to_string() + branch,
                                         version_id.to_string(),
                                     )])
-                                    .update_materialization(&metaddata_location)
                                     .commit()
                                     .await?;
                             }
@@ -203,7 +192,7 @@ pub(super) async fn build_dag<'repo>(
                                 )?;
                                 builder.location(&base_path);
                                 builder.properties(ViewProperties {
-                                    metadata_location: Default::default(),
+                                    storage_table: identifier.to_string() + "__storage",
                                     other: HashMap::from_iter(vec![(
                                         REF_PREFIX.to_string() + branch,
                                         1.to_string(),

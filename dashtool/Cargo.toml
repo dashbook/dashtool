@@ -1,6 +1,6 @@
 [package]
 name = "dashtool"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
 description = "Lakehouse build tool"
@@ -13,12 +13,12 @@ repository = "https://github.com/dashbook/dashtool"
 argo-workflow = "0.1"
 clap = { version = "=4.4", features = ["derive"] }
 dashtool-common = "0.1"
-datafusion-iceberg-sql = "0.2"
+datafusion-iceberg-sql = "0.3"
 datafusion-sql = "36.0.0"
 datafusion-common = "36.0.0"
-iceberg-rust = "0.2"
-iceberg-rust-spec = "0.2"
-iceberg-sql-catalog = "0.2"
+iceberg-rust = "0.3"
+iceberg-rust-spec = "0.3"
+iceberg-sql-catalog = "0.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlparser = { version = "0.43", features = ["visitor"] }
