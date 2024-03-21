@@ -26,4 +26,3 @@ jobs:
           RUSTTARGET: ${{ matrix.target }}
           ARCHIVE_TYPES: ${{ matrix.archive }}
           SRC_DIR: dashtool
-          TOOLCHAIN_VERSION: 1.73
