@@ -73,11 +73,11 @@ impl Plugin for DashbookPlugin {
     }
 
     fn refresh_image(&self) -> &str {
-        "ghcr.io/dashbook/refresh-iceberg-datafusion:dashbook"
+        "dashbook/refresh-iceberg-datafusion:dashbook"
     }
 
     fn refresh_config(&self, _identifier: &str, _branch: &str) -> Result<String, Error> {
-        Ok("ghcr.io/dashbook/refresh-iceberg-datafusion:dashbook".to_owned())
+        Ok("dashbook/refresh-iceberg-datafusion:dashbook".to_owned())
     }
 
     fn init_containters(
@@ -87,7 +87,7 @@ impl Plugin for DashbookPlugin {
             UserContainerBuilder::default()
                 .name("authorization".to_string())
                 .image(Some(
-                    "ghcr.io/dashbook/dashtool-authorization".to_string(),
+                    "dashbook/dashtool-authorization".to_string(),
                 ))
                 .volume_mounts(vec![
                     VolumeMountBuilder::default()

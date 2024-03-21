@@ -109,7 +109,7 @@ impl Plugin for SqlPlugin {
     }
 
     fn refresh_image(&self) -> &str {
-        "ghcr.io/dashbook/refresh-iceberg-datafusion:sql"
+        "dashbook/refresh-iceberg-datafusion:sql"
     }
 
     fn refresh_config(&self, identifier: &str, branch: &str) -> Result<String, Error> {

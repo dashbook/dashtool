@@ -390,7 +390,7 @@ mod tests {
             .write_all(
                 r#"
                 {
-                    "image": "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg",
+                    "image": "dashbook/pipelinewise-tap-postgres:iceberg",
                     "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                     "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                     "bucket": "s3://example-postgres/",
@@ -457,7 +457,7 @@ mod tests {
 
         assert_eq!(
             singer.target["image"],
-            "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg"
+            "dashbook/pipelinewise-tap-postgres:iceberg"
         );
         assert_eq!(singer.target["branch"], "main");
     }
@@ -500,7 +500,7 @@ mod tests {
             .write_all(
                 r#"
                 {
-                    "image": "ghcr.io/dashbook/pipelinewise-tap-postgres:iceberg",
+                    "image": "dashbook/pipelinewise-tap-postgres:iceberg",
                     "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                     "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                     "bucket": "s3://example-postgres/",
