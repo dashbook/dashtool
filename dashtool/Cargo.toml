@@ -22,6 +22,7 @@ iceberg-sql-catalog = "0.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlparser = { version = "0.43", features = ["visitor"] }
+sqlx = { version = "0.7.4", features = ["runtime-tokio", "tls-rustls", "any", "sqlite", "postgres", "mysql"], default-features = false }
 object_store = "0.9"
 openidconnect = "3.3"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
