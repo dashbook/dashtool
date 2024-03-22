@@ -33,7 +33,6 @@ url = "2.4"
 anyhow = "1"
 petgraph = { version = "0.6", features = ["serde-1"] }
 arrow-schema = "50.0.0"
-target-iceberg = "0.1"
 serde_yaml = "0.9.25"
 async-trait = "0.1"
 derive-getters = "0.3.0"

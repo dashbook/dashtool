@@ -1,6 +1,5 @@
 use std::{collections::HashMap, fs, path::Path, sync::Arc};
 
-use anyhow::anyhow;
 use datafusion_iceberg_sql::schema::get_schema;
 use futures::{channel::mpsc::unbounded, stream, SinkExt, StreamExt, TryStreamExt};
 use gix::diff::tree::recorder::Change;

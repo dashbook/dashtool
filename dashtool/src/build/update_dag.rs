@@ -1,6 +1,5 @@
 use std::{fs, path::Path};
 
-use anyhow::anyhow;
 use gix::diff::tree::recorder::Change;
 use iceberg_rust::sql::find_relations;
 use serde_json::{Map, Value as JsonValue};
