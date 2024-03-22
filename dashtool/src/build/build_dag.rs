@@ -208,10 +208,8 @@ pub(super) async fn build_dag<'repo>(
                             .await?;
                     }
                     Some(false) => {
-                        let parent_path = Path::new(&path).parent().ok_or(Error::Anyhow(
-                            anyhow!("target.json must be inside a subfolder."),
-                        ))?;
-                        let tap_path = parent_path.join("tap.json");
+                        let tap_path =
+                            path.trim_end_matches("target.json").to_string() + "tap.json";
                         let tap_json: JsonValue =
                             serde_json::from_str(&fs::read_to_string(&tap_path)?)?;
                         let mut target_json: JsonValue =
