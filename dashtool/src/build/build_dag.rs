@@ -12,7 +12,7 @@ use iceberg_rust_spec::spec::{
     snapshot::{SnapshotReference, SnapshotRetention},
     view_metadata::{ViewProperties, REF_PREFIX},
 };
-use serde_json::{Map, Value as JsonValue};
+use serde_json::Value as JsonValue;
 
 use crate::{
     dag::{identifier::FullIdentifier, Dag, Node, Singer, Tabular},
@@ -207,6 +207,8 @@ pub(super) async fn build_dag<'repo>(
                             .await?;
                     }
                     Some(false) => {
+                        let identifier = FullIdentifier::parse_path(Path::new(&path))?.to_string();
+
                         let tap_path =
                             path.trim_end_matches("target.json").to_string() + "tap.json";
                         let tap_json: JsonValue =
@@ -223,7 +225,7 @@ pub(super) async fn build_dag<'repo>(
                             ))
                         }?;
 
-                        for (stream, stream_config) in streams.iter() {
+                        for (_, stream_config) in streams.iter() {
                             let name = if let JsonValue::String(name) = &stream_config["identifier"]
                             {
                                 Ok(name)
@@ -273,19 +275,15 @@ pub(super) async fn build_dag<'repo>(
                                     .commit()
                                     .await?;
                             }
-                            let mut target_json = target_json.clone();
-                            target_json["streams"] =
-                                Map::from_iter(vec![(stream.clone(), stream_config.clone())])
-                                    .into();
-                            singer_sender
-                                .send(Node::Singer(Singer::new(
-                                    name,
-                                    tap_json.clone(),
-                                    target_json,
-                                    branch,
-                                )))
-                                .await?;
                         }
+                        singer_sender
+                            .send(Node::Singer(Singer::new(
+                                &identifier,
+                                tap_json.clone(),
+                                target_json,
+                                branch,
+                            )))
+                            .await?;
                     }
                     _ => (),
                 };
@@ -303,11 +301,11 @@ pub(super) async fn build_dag<'repo>(
         HashMap::from_iter(tabular_reciever.collect::<Vec<_>>().await);
 
     for singer in singers {
-        dag.add_node(singer)
+        dag.add_node(singer)?;
     }
 
     for (node, (sql, _)) in &tabs {
-        dag.add_node(Node::Tabular(Tabular::new(node, branch, sql)))
+        dag.add_node(Node::Tabular(Tabular::new(node, branch, sql)))?;
     }
 
     for (node, (_, children)) in tabs {
@@ -441,12 +439,17 @@ mod tests {
             .await
             .expect("Failed to build dag");
 
+        assert_eq!(dag.singers.len(), 1);
         assert_eq!(dag.map.len(), 1);
 
-        let singer = &dag.dag[*dag
-            .map
+        let orders = dag
+            .singers
             .get("bronze.inventory.orders")
-            .expect("Failed to get graph index")];
+            .expect("Failed to get graph index");
+
+        assert_eq!(orders, "bronze.inventory.target");
+
+        let singer = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
 
         let Node::Singer(singer) = singer else {
             panic!("Node is not a singer")
@@ -650,6 +653,7 @@ mod tests {
             .await
             .expect("Failed to build dag");
 
+        assert_eq!(dag.singers.len(), 1);
         assert_eq!(dag.map.len(), 2);
 
         let tabular = &dag.dag[*dag

@@ -2,7 +2,7 @@ use std::{fs, path::Path};
 
 use gix::diff::tree::recorder::Change;
 use iceberg_rust::sql::find_relations;
-use serde_json::{Map, Value as JsonValue};
+use serde_json::Value as JsonValue;
 
 use crate::{
     dag::{identifier::FullIdentifier, Dag, Node, Singer, Tabular},
@@ -34,34 +34,19 @@ pub(super) fn update_dag(diff: &[Change], dag: Option<Dag>, branch: &str) -> Res
     }
 
     for path in singers {
+        let identifier = FullIdentifier::parse_path(Path::new(&path))?.to_string();
+
         let tap_path = path.trim_end_matches("target.json").to_string() + "tap.json";
         let tap_json: JsonValue = serde_json::from_str(&fs::read_to_string(&tap_path)?)?;
         let mut target_json: JsonValue = serde_json::from_str(&fs::read_to_string(path)?)?;
         target_json["branch"] = branch.to_string().into();
-        let streams = if let JsonValue::Object(object) = &target_json["streams"] {
-            Ok(object)
-        } else {
-            Err(Error::Text(
-                "Streams in config must be an object.".to_string(),
-            ))
-        }?;
 
-        for (stream, stream_config) in streams.iter() {
-            let name = if let JsonValue::String(name) = &stream_config["identifier"] {
-                Ok(name)
-            } else {
-                Err(Error::Text("Stream identifer is not a string.".to_string()))
-            }?;
-            let mut target_json = target_json.clone();
-            target_json["streams"] =
-                Map::from_iter(vec![(stream.clone(), stream_config.clone())]).into();
-            dag.add_node(Node::Singer(Singer::new(
-                name,
-                tap_json.clone(),
-                target_json,
-                branch,
-            )));
-        }
+        dag.add_node(Node::Singer(Singer::new(
+            &identifier,
+            tap_json.clone(),
+            target_json,
+            branch,
+        )))?;
     }
 
     for path in tabulars {
@@ -71,7 +56,7 @@ pub(super) fn update_dag(diff: &[Change], dag: Option<Dag>, branch: &str) -> Res
 
         let identifier = FullIdentifier::parse_path(Path::new(&path))?.to_string();
 
-        dag.add_node(Node::Tabular(Tabular::new(&identifier, branch, &sql)));
+        dag.add_node(Node::Tabular(Tabular::new(&identifier, branch, &sql)))?;
 
         for child in children {
             dag.add_edge(&identifier, &child)?
@@ -159,12 +144,16 @@ mod tests {
 
         let dag = update_dag(&changes, None, "main").expect("Failed to create dag");
 
-        assert_eq!(dag.map.len(), 1);
+        assert_eq!(dag.singers.len(), 1);
 
-        let singer = &dag.dag[*dag
-            .map
+        let orders = dag
+            .singers
             .get("bronze.inventory.orders")
-            .expect("Failed to get graph index")];
+            .expect("Failed to get graph index");
+
+        assert_eq!(orders, "bronze.inventory.target");
+
+        let singer = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
 
         let Node::Singer(singer) = singer else {
             panic!("Node is not a singer")
@@ -352,12 +341,17 @@ mod tests {
 
         let dag = update_dag(&changes, None, "expenditures").expect("Failed to create dag");
 
+        assert_eq!(dag.singers.len(), 1);
         assert_eq!(dag.map.len(), 1);
 
-        let singer = &dag.dag[*dag
-            .map
+        let orders = dag
+            .singers
             .get("bronze.inventory.orders")
-            .expect("Failed to get graph index")];
+            .expect("Failed to get graph index");
+
+        assert_eq!(orders, "bronze.inventory.target");
+
+        let singer = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
 
         let Node::Singer(singer) = singer else {
             panic!("Node is not a singer")
