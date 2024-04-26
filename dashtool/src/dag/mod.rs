@@ -48,19 +48,34 @@ impl Tabular {
 pub struct Singer {
     pub(crate) identifier: String,
     pub(crate) branch: String,
+    pub(crate) image: String,
     pub(crate) tap: JsonValue,
     pub(crate) target: JsonValue,
 }
 
 impl Singer {
-    pub(crate) fn new(identifier: &str, tap: JsonValue, target: JsonValue, branch: &str) -> Self {
+    pub(crate) fn new(
+        identifier: &str,
+        image: &str,
+        tap: JsonValue,
+        target: JsonValue,
+        branch: &str,
+    ) -> Self {
         Self {
             identifier: identifier.to_owned(),
             branch: branch.to_owned(),
+            image: image.to_owned(),
             tap,
             target,
         }
     }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub(crate) struct SingerConfig {
+    pub(crate) image: String,
+    pub(crate) tap: JsonValue,
+    pub(crate) target: JsonValue,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
