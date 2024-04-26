@@ -11,6 +11,7 @@ use dashtool::{
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
+#[command(version)]
 struct Args {
     #[command(subcommand)]
     commands: Commands,
