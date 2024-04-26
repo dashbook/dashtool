@@ -45,9 +45,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
             let task = match node {
                 Node::Singer(node) => {
                     templates
-                        .entry(serde_json::from_value::<String>(
-                            node.target["image"].clone(),
-                        )?)
+                        .entry(node.image.clone())
                         .or_insert_with(|| singer_template(&node, &*plugin).unwrap());
 
                     let mut config_map = ConfigMap::default();
@@ -80,10 +78,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
                                 .replace(['/', ':', '_', '.'], "-")
                                 .to_lowercase(),
                         )
-                        .template(Some(
-                            serde_json::from_value::<String>(node.target["image"].clone())?
-                                .replace(['/', ':', '_', '.'], "-"),
-                        ))
+                        .template(Some(node.image.clone().replace(['/', ':', '_', '.'], "-")))
                         .arguments(Some(
                             ArgumentsBuilder::default()
                                 .parameters(vec![{
