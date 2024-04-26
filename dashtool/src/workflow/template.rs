@@ -12,7 +12,7 @@ pub(crate) fn singer_template(
 ) -> Result<IoArgoprojWorkflowV1alpha1Template, Error> {
     let template =
         TemplateBuilder::default()
-            .name(Some(node.image.clone()))
+            .name(Some(node.image.clone().replace(['/', ':', '_', '.'], "-")))
             .inputs(Some(
                 InputsBuilder::default()
                     .parameters(vec![{
