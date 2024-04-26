@@ -12,10 +12,7 @@ pub(crate) fn singer_template(
 ) -> Result<IoArgoprojWorkflowV1alpha1Template, Error> {
     let template =
         TemplateBuilder::default()
-            .name(Some(
-                serde_json::from_value::<String>(node.target["image"].clone())?
-                    .replace(['/', ':', '.'], "-"),
-            ))
+            .name(Some(node.image.clone()))
             .inputs(Some(
                 InputsBuilder::default()
                     .parameters(vec![{
@@ -26,9 +23,7 @@ pub(crate) fn singer_template(
             ))
             .container(Some(
                 ContainerBuilder::default()
-                    .image(serde_json::from_value::<String>(
-                        node.target["image"].clone(),
-                    )?)
+                    .image(node.image.clone())
                     .volume_mounts(vec![VolumeMountBuilder::default()
                         .name("config".to_string())
                         .mount_path("/tmp/config".to_string())
