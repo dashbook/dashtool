@@ -24,9 +24,8 @@ use self::template::{iceberg_template, singer_template};
 mod template;
 
 static API_VERSION: &str = "argoproj.io/v1alpha1";
-pub static WORKFLOW_DIR: &str = "argo";
 
-pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
+pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
     let repo = gix::discover(".")?;
     let branch = branch(&repo)?;
 
@@ -200,10 +199,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
         workflow_yaml.push_str(&yaml);
     }
 
-    fs::write(
-        &(WORKFLOW_DIR.to_string() + "/workflow.yaml"),
-        workflow_yaml,
-    )?;
+    fs::write(output, workflow_yaml)?;
 
     Ok(())
 }

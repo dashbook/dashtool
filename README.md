@@ -24,8 +24,26 @@ During the workflow execution Argo starts Docker containers that run Datafusion 
 ## Examples
 
 - [Postgres example](https://killercoda.com/dashbook/scenario/dashtool-postgres)
+- [Mysql example](https://killercoda.com/dashbook/scenario/dashtool-mysql)
+- [Kafka example](https://killercoda.com/dashbook/scenario/dashtool-kafka)
 
 ## Usage
+
+Dashtool goes through a build, a workflow and an apply step to turn the declarative input files into an automatically refreshing data pipeline. This is shown in the following diagram:
+
+```mermaid
+graph LR
+    git[Files in 
+    git repo]
+    catalog[Iceberg tables 
+    in catalog]
+    workflows[Argo
+    workflow]
+    data[Data]
+    git -->|dashtool build|catalog
+    catalog -->|dashtool workflow|workflows
+    workflows -->|dashtool apply|data
+```
 
 Check out the [Documentation](Documentation.md) for a detailed description.
 
@@ -37,7 +55,7 @@ The `build` command analyzes all `.sql` files in the subdirectories of the curre
 dashtool build
 ```
 
-### Create Workflow
+### Workflow
 
 The `workflow` command creates a lineage DAG based on the `.sql` files and constructs an Argo workflow based on it. It stores the Workflow configuration file in `argo/workflow.yaml`.
 
@@ -45,12 +63,12 @@ The `workflow` command creates a lineage DAG based on the `.sql` files and const
 dashtool workflow
 ```
 
-### Apply Workflow to the Kubernetes cluster
+### Apply
 
 To apply the latest version of the workflow to the Kubernetes cluster run the following command:
 
 ```shell
-kubectl apply -f argo/workflow.yaml
+dashtool apply
 ```
 
 ## Installation

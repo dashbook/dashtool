@@ -2,8 +2,6 @@
 
 ## Commands
 
-Check out the [Documentation](Documentation) for a detailed description.
-
 ### Build
 
 The `build` command analyzes all `.sql` files in the subdirectories of the current directory and creates the corresponding Iceberg Materialized Views in the catalog.
