@@ -221,16 +221,23 @@ pub(super) async fn build_dag<'repo>(
                         destination_json["branch"] = branch.to_string().into();
 
                         let (catalog_name, namespace_name) =
-                            path.split("/").next_tuple().ok_or(Error::Text(
+                            Path::new(&path).iter().next_tuple().ok_or(Error::Text(
                                 "File path doesn't contain catalog name and namespace".to_owned(),
                             ))?;
 
-                        let catalog =
-                            catalog_list.catalog(catalog_name).await.ok_or(Error::Text(
-                                format!("Catalog {} not found in catalog list", catalog_name),
-                            ))?;
+                        let catalog = catalog_list
+                            .catalog(
+                                catalog_name
+                                    .to_str()
+                                    .ok_or(Error::Text("Catalog name not present.".to_owned()))?,
+                            )
+                            .await
+                            .ok_or(Error::Text(format!("Catalog not found in catalog list",)))?;
 
-                        let namespace = Namespace::try_new(&[namespace_name.to_string()])?;
+                        let namespace = Namespace::try_new(&[namespace_name
+                            .to_str()
+                            .ok_or(Error::Text("Catalog name not a string".to_owned()))?
+                            .to_string()])?;
 
                         let identifiers = catalog.list_tabulars(&namespace).await?;
 
