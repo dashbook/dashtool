@@ -3,6 +3,7 @@ use std::{collections::HashMap, fs, path::Path, sync::Arc};
 use datafusion_iceberg_sql::schema::get_schema;
 use futures::{channel::mpsc::unbounded, stream, SinkExt, StreamExt, TryStreamExt};
 use gix::diff::tree::recorder::Change;
+use iceberg_rust::catalog::namespace::Namespace;
 use iceberg_rust::spec::view_metadata::{Version, ViewRepresentation};
 use iceberg_rust::{
     catalog::tabular::Tabular as IcebergTabular, error::Error as IcebergError, sql::find_relations,
@@ -15,7 +16,7 @@ use iceberg_rust::{
         view_metadata::REF_PREFIX,
     },
 };
-use serde_json::Value as JsonValue;
+use itertools::Itertools;
 
 use crate::{
     dag::{identifier::FullIdentifier, Dag, Ingest, IngestConfig, Node, Tabular},
@@ -210,8 +211,6 @@ pub(super) async fn build_dag<'repo>(
                             .await?;
                     }
                     Some(false) => {
-                        let identifier = FullIdentifier::parse_path(Path::new(&path))?.to_string();
-
                         let ingest_json: IngestConfig =
                             serde_json::from_str(&fs::read_to_string(&path)?)?;
                         let source_json = ingest_json.source;
@@ -221,36 +220,23 @@ pub(super) async fn build_dag<'repo>(
 
                         destination_json["branch"] = branch.to_string().into();
 
-                        let streams =
-                            if let JsonValue::Object(object) = &destination_json["streams"] {
-                                Ok(object)
-                            } else {
-                                Err(Error::Text(
-                                    "Streams in config must be an object.".to_string(),
-                                ))
-                            }?;
+                        let (catalog_name, namespace_name) =
+                            path.split("/").next_tuple().ok_or(Error::Text(
+                                "File path doesn't contain catalog name and namespace".to_owned(),
+                            ))?;
 
-                        for (_, stream_config) in streams.iter() {
-                            let name = if let JsonValue::String(name) = &stream_config["identifier"]
-                            {
-                                Ok(name)
-                            } else {
-                                Err(Error::Text("Stream identifer is not a string.".to_string()))
-                            }?;
+                        let catalog =
+                            catalog_list.catalog(catalog_name).await.ok_or(Error::Text(
+                                format!("Catalog {} not found in catalog list", catalog_name),
+                            ))?;
 
+                        let namespace = Namespace::try_new(&[namespace_name.to_string()])?;
+
+                        let identifiers = catalog.list_tabulars(&namespace).await?;
+
+                        for identifier in identifiers.iter() {
                             if let Some(merged_branch) = merged_branch {
-                                let identifier = FullIdentifier::parse(name)?;
-                                let catalog_name = identifier.catalog_name();
-
-                                let catalog = catalog_list.catalog(catalog_name).await.ok_or(
-                                    IcebergError::NotFound(
-                                        "Catalog".to_string(),
-                                        catalog_name.to_string(),
-                                    ),
-                                )?;
-
-                                let tabular =
-                                    catalog.load_tabular(&identifier.identifier()?).await?;
+                                let tabular = catalog.clone().load_tabular(&identifier).await?;
 
                                 let mut table = if let IcebergTabular::Table(table) = tabular {
                                     Ok(table)
@@ -281,9 +267,10 @@ pub(super) async fn build_dag<'repo>(
                                     .await?;
                             }
                         }
+                        let ingest_key = FullIdentifier::parse_path(Path::new(&path))?;
                         ingest_sender
                             .send(Node::Ingest(Ingest::new(
-                                &identifier,
+                                &ingest_key.to_string(),
                                 &image,
                                 source_json.clone(),
                                 destination_json,

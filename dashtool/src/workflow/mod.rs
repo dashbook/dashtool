@@ -204,5 +204,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
 
     fs::write(output, workflow_yaml)?;
 
+    println!("Creating workflow successful.");
+
     Ok(())
 }

@@ -106,5 +106,7 @@ pub async fn build(plugin: Arc<dyn Plugin>) -> Result<(), Error> {
 
     fs::write(".dashtool/state.json", state_json)?;
 
+    println!("Building successful.");
+
     Ok(())
 }
