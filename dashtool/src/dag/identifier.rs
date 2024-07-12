@@ -51,7 +51,7 @@ impl FullIdentifier {
             .to_str()
             .ok_or(Error::Text("Failed to convert OsStr".to_string()))?
             .trim_end_matches(".sql")
-            .trim_end_matches(".singer.json")
+            .trim_end_matches(".ingest.json")
             .to_owned();
         let namespace_name = parts
             .next()

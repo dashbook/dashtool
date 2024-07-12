@@ -8,7 +8,7 @@ It handles Ingestion, Transformation and Orchestration.
 - Uses declarative SQL select statements as input
 - git inspired data version control
 - Interoperability through [Apache Iceberg](https://iceberg.apache.org/) Table format
-- Data ingestion through [Singer.io](https://www.singer.io/)
+- Data ingestion through [Airbyte](https://github.com/dashbook/airbyte)
 - Data processing based on [Datafusion](https://arrow.apache.org/datafusion/)
 - Workflow orchestration in Kubernetes through [Argo Workflows](https://argoproj.github.io/workflows/)
 

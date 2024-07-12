@@ -1,4 +1,4 @@
-use crate::{dag::Singer, error::Error, plugins::Plugin};
+use crate::{dag::Ingest, error::Error, plugins::Plugin};
 
 use argo_workflow::schema::{
     ConfigMapVolumeSourceBuilder, ContainerBuilder, InputsBuilder,
@@ -6,8 +6,8 @@ use argo_workflow::schema::{
     TemplateBuilder, UserContainerBuilder, VolumeBuilder, VolumeMountBuilder,
 };
 
-pub(crate) fn singer_template(
-    node: &Singer,
+pub(crate) fn ingest_template(
+    node: &Ingest,
     plugin: &dyn Plugin,
 ) -> Result<IoArgoprojWorkflowV1alpha1Template, Error> {
     let template =

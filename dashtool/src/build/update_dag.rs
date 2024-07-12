@@ -4,7 +4,7 @@ use gix::diff::tree::recorder::Change;
 use iceberg_rust::sql::find_relations;
 
 use crate::{
-    dag::{identifier::FullIdentifier, Dag, Node, Singer, SingerConfig, Tabular},
+    dag::{identifier::FullIdentifier, Dag, Ingest, IngestConfig, Node, Tabular},
     error::Error,
 };
 
@@ -12,7 +12,7 @@ use crate::{
 pub(super) fn update_dag(diff: &[Change], dag: Option<Dag>, branch: &str) -> Result<Dag, Error> {
     let mut dag = dag.unwrap_or(Dag::new());
 
-    let mut singers = Vec::new();
+    let mut ingests = Vec::new();
     let mut tabulars = Vec::new();
 
     for delta in diff {
@@ -24,30 +24,30 @@ pub(super) fn update_dag(diff: &[Change], dag: Option<Dag>, branch: &str) -> Res
             } => {
                 if path.ends_with(b".sql") {
                     tabulars.push(String::from_utf8(path.as_slice().to_owned())?)
-                } else if path.ends_with(b".singer.json") {
-                    singers.push(String::from_utf8(path.as_slice().to_owned())?)
+                } else if path.ends_with(b".ingest.json") {
+                    ingests.push(String::from_utf8(path.as_slice().to_owned())?)
                 };
             }
             _ => (),
         }
     }
 
-    for path in singers {
+    for path in ingests {
         let identifier = FullIdentifier::parse_path(Path::new(&path))?.to_string();
 
-        let singer_json: SingerConfig = serde_json::from_str(&fs::read_to_string(&path)?)?;
-        let tap_json = singer_json.tap;
-        let mut target_json = singer_json.target;
+        let ingest_json: IngestConfig = serde_json::from_str(&fs::read_to_string(&path)?)?;
+        let source_json = ingest_json.source;
+        let mut destination_json = ingest_json.destination;
 
-        let image = singer_json.image;
+        let image = ingest_json.image;
 
-        target_json["branch"] = branch.to_string().into();
+        destination_json["branch"] = branch.to_string().into();
 
-        dag.add_node(Node::Singer(Singer::new(
+        dag.add_node(Node::Ingest(Ingest::new(
             &identifier,
             &image,
-            tap_json.clone(),
-            target_json,
+            source_json.clone(),
+            destination_json,
             branch,
         )))?;
     }
@@ -83,7 +83,7 @@ mod tests {
     use crate::{build::update_dag::update_dag, dag::Node};
 
     #[test]
-    fn add_singer() {
+    fn add_ingest() {
         let temp_dir = TempDir::new().unwrap();
 
         env::set_current_dir(temp_dir.path()).expect("Failed to set current work dir");
@@ -95,14 +95,14 @@ mod tests {
         let bronze_inventory_path = bronze_path.join("inventory");
         fs::create_dir(&bronze_inventory_path).expect("Failed to create directory");
 
-        let config_path = bronze_inventory_path.join(Path::new("postgres.singer.json"));
+        let config_path = bronze_inventory_path.join(Path::new("postgres.ingest.json"));
         File::create(&config_path)
             .expect("Failed to create file")
             .write_all(
                 r#"
                 {
-                "image":"dashbook/pipelinewise-tap-postgres:sql",
-                "tap":{
+                "image":"dashbook/source-postgres:sql",
+                "source":{
                        "host": "172.17.0.2",
     	               "port": 5432,
     	               "user": "postgres",
@@ -111,7 +111,7 @@ mod tests {
     	               "filter_schemas": "inventory",
     	               "default_replication_method": "LOG_BASED"
                     },
-                "target":{
+                "destination":{
                         "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                         "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                         "bucket": "s3://example-postgres/",
@@ -134,22 +134,22 @@ mod tests {
 
         let dag = update_dag(&changes, None, "main").expect("Failed to create dag");
 
-        assert_eq!(dag.singers.len(), 1);
+        assert_eq!(dag.ingests.len(), 1);
 
         let orders = dag
-            .singers
+            .ingests
             .get("bronze.inventory.orders")
             .expect("Failed to get graph index");
 
         assert_eq!(orders, "bronze.inventory.postgres");
 
-        let singer = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
+        let ingest = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
 
-        let Node::Singer(singer) = singer else {
-            panic!("Node is not a singer")
+        let Node::Ingest(ingest) = ingest else {
+            panic!("Node is not an ingest")
         };
 
-        assert_eq!(singer.image, "dashbook/pipelinewise-tap-postgres:sql")
+        assert_eq!(ingest.image, "dashbook/source-postgres:sql")
     }
 
     #[test]
@@ -165,14 +165,14 @@ mod tests {
         let bronze_inventory_path = bronze_path.join("inventory");
         fs::create_dir(&bronze_inventory_path).expect("Failed to create directory");
 
-        let config_path = bronze_inventory_path.join(Path::new("postgres.singer.json"));
+        let config_path = bronze_inventory_path.join(Path::new("postgres.ingest.json"));
         File::create(&config_path)
             .expect("Failed to create file")
             .write_all(
                 r#"
                 {
-                "image":"dashbook/pipelinewise-tap-postgres:sql",
-                "tap":{
+                "image":"dashbook/source-postgres:sql",
+                "source":{
                        "host": "172.17.0.2",
     	               "port": 5432,
     	               "user": "postgres",
@@ -181,7 +181,7 @@ mod tests {
     	               "filter_schemas": "inventory",
     	               "default_replication_method": "LOG_BASED"
                     },
-                "target":{
+                "destination":{
                         "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                         "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                         "bucket": "s3://example-postgres/",
@@ -238,14 +238,14 @@ mod tests {
             .expect("Failed to get graph index")];
 
         let Node::Tabular(tabular) = tabular else {
-            panic!("Node is not a singer")
+            panic!("Node is not a tabular")
         };
 
         assert_eq!(tabular.identifier, "silver.inventory.factOrder")
     }
 
     #[test]
-    fn add_singer_branch() {
+    fn add_ingest_branch() {
         let temp_dir = TempDir::new().unwrap();
 
         env::set_current_dir(temp_dir.path()).expect("Failed to set current work dir");
@@ -257,14 +257,14 @@ mod tests {
         let bronze_inventory_path = bronze_path.join("inventory");
         fs::create_dir(&bronze_inventory_path).expect("Failed to create directory");
 
-        let config_path = bronze_inventory_path.join(Path::new("postgres.singer.json"));
+        let config_path = bronze_inventory_path.join(Path::new("postgres.ingest.json"));
         File::create(&config_path)
             .expect("Failed to create file")
             .write_all(
                 r#"
                 {
-                "image":"dashbook/pipelinewise-tap-postgres:sql",
-                "tap":{
+                "image":"dashbook/source-postgres:sql",
+                "source":{
                        "host": "172.17.0.2",
     	               "port": 5432,
     	               "user": "postgres",
@@ -273,7 +273,7 @@ mod tests {
     	               "filter_schemas": "inventory",
     	               "default_replication_method": "LOG_BASED"
                     },
-                "target":{
+                "destination":{
                         "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                         "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                         "bucket": "s3://example-postgres/",
@@ -296,22 +296,22 @@ mod tests {
 
         let dag = update_dag(&changes, None, "expenditures").expect("Failed to create dag");
 
-        assert_eq!(dag.singers.len(), 1);
+        assert_eq!(dag.ingests.len(), 1);
         assert_eq!(dag.map.len(), 1);
 
         let orders = dag
-            .singers
+            .ingests
             .get("bronze.inventory.orders")
             .expect("Failed to get graph index");
 
         assert_eq!(orders, "bronze.inventory.postgres");
 
-        let singer = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
+        let ingest = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
 
-        let Node::Singer(singer) = singer else {
-            panic!("Node is not a singer")
+        let Node::Ingest(ingest) = ingest else {
+            panic!("Node is not an ingest")
         };
 
-        assert_eq!(singer.image, "dashbook/pipelinewise-tap-postgres:sql")
+        assert_eq!(ingest.image, "dashbook/source-postgres:sql")
     }
 }

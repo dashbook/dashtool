@@ -15,13 +15,13 @@ pub(crate) mod identifier;
 #[derive(Serialize, Deserialize, Debug)]
 pub enum Node {
     Tabular(Tabular),
-    Singer(Singer),
+    Ingest(Ingest),
 }
 
 impl Node {
     pub(crate) fn identifier(&self) -> &str {
         match self {
-            Node::Singer(singer) => &singer.identifier,
+            Node::Ingest(ingest) => &ingest.identifier,
             Node::Tabular(tab) => &tab.identifier,
         }
     }
@@ -45,42 +45,42 @@ impl Tabular {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Singer {
+pub struct Ingest {
     pub(crate) identifier: String,
     pub(crate) branch: String,
     pub(crate) image: String,
-    pub(crate) tap: JsonValue,
-    pub(crate) target: JsonValue,
+    pub(crate) source: JsonValue,
+    pub(crate) destination: JsonValue,
 }
 
-impl Singer {
+impl Ingest {
     pub(crate) fn new(
         identifier: &str,
         image: &str,
-        tap: JsonValue,
-        target: JsonValue,
+        source: JsonValue,
+        destination: JsonValue,
         branch: &str,
     ) -> Self {
         Self {
             identifier: identifier.to_owned(),
             branch: branch.to_owned(),
             image: image.to_owned(),
-            tap,
-            target,
+            source,
+            destination,
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub(crate) struct SingerConfig {
+pub(crate) struct IngestConfig {
     pub(crate) image: String,
-    pub(crate) tap: JsonValue,
-    pub(crate) target: JsonValue,
+    pub(crate) source: JsonValue,
+    pub(crate) destination: JsonValue,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Dag {
-    pub(crate) singers: HashMap<String, String>,
+    pub(crate) ingests: HashMap<String, String>,
     pub(crate) map: HashMap<String, NodeIndex>,
     pub(crate) dag: StableDiGraph<Node, ()>,
 }
@@ -88,7 +88,7 @@ pub struct Dag {
 impl Dag {
     pub fn new() -> Self {
         Self {
-            singers: HashMap::new(),
+            ingests: HashMap::new(),
             map: HashMap::new(),
             dag: StableDiGraph::new(),
         }
@@ -98,10 +98,10 @@ impl Dag {
 impl Dag {
     pub(crate) fn add_node(&mut self, node: Node) -> Result<(), Error> {
         let identifier = match &node {
-            Node::Singer(singer) => {
-                let identifier = singer.identifier.clone();
+            Node::Ingest(ingest) => {
+                let identifier = ingest.identifier.clone();
                 let streams: HashMap<String, JsonValue> =
-                    serde_json::from_value(singer.target["streams"].clone())
+                    serde_json::from_value(ingest.destination["streams"].clone())
                         .expect("target.json must contain streams field.");
                 for (_, config) in &streams {
                     let stream = if let JsonValue::String(stream) = &config["identifier"] {
@@ -109,7 +109,7 @@ impl Dag {
                     } else {
                         Err(Error::Anyhow(anyhow!("Stream must have an identifier")))
                     }?;
-                    self.singers.insert(stream.clone(), identifier.clone());
+                    self.ingests.insert(stream.clone(), identifier.clone());
                 }
                 identifier
             }
@@ -135,7 +135,7 @@ impl Dag {
             .cloned()
             .ok_or(Error::Text("Node not in graph.".to_string()))?;
 
-        let b = match self.singers.get(b) {
+        let b = match self.ingests.get(b) {
             None => self
                 .map
                 .get(b)
@@ -161,7 +161,7 @@ pub fn get_dag(branch: &str) -> Result<Dag, Error> {
         dag
     } else {
         Dag {
-            singers: HashMap::new(),
+            ingests: HashMap::new(),
             map: HashMap::new(),
             dag: StableDiGraph::new(),
         }

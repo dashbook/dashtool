@@ -19,7 +19,7 @@ use crate::{
     plugins::Plugin,
 };
 
-use self::template::{iceberg_template, singer_template};
+use self::template::{iceberg_template, ingest_template};
 
 mod template;
 
@@ -42,10 +42,10 @@ pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
         .map(|index| {
             let node = &dag.dag[index];
             let task = match node {
-                Node::Singer(node) => {
+                Node::Ingest(node) => {
                     templates
                         .entry(node.image.clone())
-                        .or_insert_with(|| singer_template(&node, &*plugin).unwrap());
+                        .or_insert_with(|| ingest_template(&node, &*plugin).unwrap());
 
                     let mut config_map = ConfigMap::default();
                     config_map.metadata.name = Some(
@@ -56,10 +56,13 @@ pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
                             + "-config-template",
                     );
                     config_map.data = Some(BTreeMap::from_iter(vec![
-                        ("tap.json".to_owned(), serde_json::to_string(&node.tap)?),
                         (
-                            "target.json".to_owned(),
-                            serde_json::to_string(&node.target)?,
+                            "source.json".to_owned(),
+                            serde_json::to_string(&node.source)?,
+                        ),
+                        (
+                            "destination.json".to_owned(),
+                            serde_json::to_string(&node.destination)?,
                         ),
                     ]));
                     config_maps.insert(
