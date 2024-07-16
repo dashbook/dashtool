@@ -33,7 +33,7 @@ pub(super) fn update_dag(diff: &[Change], dag: Option<Dag>, branch: &str) -> Res
     }
 
     for path in ingests {
-        let identifier = FullIdentifier::parse_path(Path::new(&path))?.to_string();
+        let identifier = FullIdentifier::parse_path(Path::new(&path))?;
 
         let ingest_json: IngestConfig = serde_json::from_str(&fs::read_to_string(&path)?)?;
         let source_json = ingest_json.source;
@@ -57,12 +57,12 @@ pub(super) fn update_dag(diff: &[Change], dag: Option<Dag>, branch: &str) -> Res
 
         let children = find_relations(&sql)?;
 
-        let identifier = FullIdentifier::parse_path(Path::new(&path))?.to_string();
+        let identifier = FullIdentifier::parse_path(Path::new(&path))?;
 
         dag.add_node(Node::Tabular(Tabular::new(&identifier, branch, &sql)))?;
 
         for child in children {
-            dag.add_edge(&identifier, &child)?
+            dag.add_edge(&identifier.to_string(), &child)?
         }
     }
     Ok(dag)
@@ -112,7 +112,6 @@ mod tests {
     	               "default_replication_method": "LOG_BASED"
                     },
                 "destination":{
-                        "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                         "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                         "bucket": "s3://example-postgres/",
                         "access_token": "$ACCESS_TOKEN",
@@ -138,12 +137,12 @@ mod tests {
 
         let orders = dag
             .ingests
-            .get("bronze.inventory.orders")
+            .get("bronze.inventory")
             .expect("Failed to get graph index");
 
-        assert_eq!(orders, "bronze.inventory.postgres");
+        assert_eq!(orders[0], "bronze.inventory.postgres");
 
-        let ingest = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
+        let ingest = &dag.dag[*dag.map.get(&orders[0]).expect("Failed to get graph index")];
 
         let Node::Ingest(ingest) = ingest else {
             panic!("Node is not an ingest")
@@ -182,7 +181,6 @@ mod tests {
     	               "default_replication_method": "LOG_BASED"
                     },
                 "destination":{
-                        "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                         "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                         "bucket": "s3://example-postgres/",
                         "access_token": "$ACCESS_TOKEN",
@@ -241,7 +239,10 @@ mod tests {
             panic!("Node is not a tabular")
         };
 
-        assert_eq!(tabular.identifier, "silver.inventory.factOrder")
+        assert_eq!(
+            &tabular.identifier.to_string(),
+            "silver.inventory.factOrder"
+        )
     }
 
     #[test]
@@ -274,7 +275,6 @@ mod tests {
     	               "default_replication_method": "LOG_BASED"
                     },
                 "destination":{
-                        "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                         "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                         "bucket": "s3://example-postgres/",
                         "access_token": "$ACCESS_TOKEN",
@@ -301,12 +301,12 @@ mod tests {
 
         let orders = dag
             .ingests
-            .get("bronze.inventory.orders")
+            .get("bronze.inventory")
             .expect("Failed to get graph index");
 
-        assert_eq!(orders, "bronze.inventory.postgres");
+        assert_eq!(orders[0], "bronze.inventory.postgres");
 
-        let ingest = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
+        let ingest = &dag.dag[*dag.map.get(&orders[0]).expect("Failed to get graph index")];
 
         let Node::Ingest(ingest) = ingest else {
             panic!("Node is not an ingest")

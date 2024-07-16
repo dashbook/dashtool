@@ -3,12 +3,14 @@ use std::{
     fs,
 };
 
-use anyhow::anyhow;
+use itertools::Itertools;
 use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
 use crate::error::Error;
+
+use self::identifier::FullIdentifier;
 
 pub(crate) mod identifier;
 
@@ -19,7 +21,7 @@ pub enum Node {
 }
 
 impl Node {
-    pub(crate) fn identifier(&self) -> &str {
+    pub(crate) fn identifier(&self) -> &FullIdentifier {
         match self {
             Node::Ingest(ingest) => &ingest.identifier,
             Node::Tabular(tab) => &tab.identifier,
@@ -29,15 +31,15 @@ impl Node {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Tabular {
-    pub(crate) identifier: String,
+    pub(crate) identifier: FullIdentifier,
     pub(crate) branch: String,
     pub(crate) query: String,
 }
 
 impl Tabular {
-    pub(crate) fn new(identifier: &str, branch: &str, query: &String) -> Self {
+    pub(crate) fn new(identifier: &FullIdentifier, branch: &str, query: &String) -> Self {
         Self {
-            identifier: identifier.to_owned(),
+            identifier: identifier.clone(),
             branch: branch.to_owned(),
             query: query.to_owned(),
         }
@@ -46,7 +48,7 @@ impl Tabular {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Ingest {
-    pub(crate) identifier: String,
+    pub(crate) identifier: FullIdentifier,
     pub(crate) branch: String,
     pub(crate) image: String,
     pub(crate) source: JsonValue,
@@ -55,14 +57,14 @@ pub struct Ingest {
 
 impl Ingest {
     pub(crate) fn new(
-        identifier: &str,
+        identifier: &FullIdentifier,
         image: &str,
         source: JsonValue,
         destination: JsonValue,
         branch: &str,
     ) -> Self {
         Self {
-            identifier: identifier.to_owned(),
+            identifier: identifier.clone(),
             branch: branch.to_owned(),
             image: image.to_owned(),
             source,
@@ -80,7 +82,7 @@ pub(crate) struct IngestConfig {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Dag {
-    pub(crate) ingests: HashMap<String, String>,
+    pub(crate) ingests: HashMap<String, Vec<String>>,
     pub(crate) map: HashMap<String, NodeIndex>,
     pub(crate) dag: StableDiGraph<Node, ()>,
 }
@@ -100,22 +102,15 @@ impl Dag {
         let identifier = match &node {
             Node::Ingest(ingest) => {
                 let identifier = ingest.identifier.clone();
-                let streams: HashMap<String, JsonValue> =
-                    serde_json::from_value(ingest.destination["streams"].clone())
-                        .expect("target.json must contain streams field.");
-                for (_, config) in &streams {
-                    let stream = if let JsonValue::String(stream) = &config["identifier"] {
-                        Ok(stream)
-                    } else {
-                        Err(Error::Anyhow(anyhow!("Stream must have an identifier")))
-                    }?;
-                    self.ingests.insert(stream.clone(), identifier.clone());
-                }
+                self.ingests
+                    .entry(identifier.catalog_name().clone() + "." + identifier.namespace_name())
+                    .and_modify(|x| x.push(identifier.to_string()))
+                    .or_insert(vec![identifier.to_string()]);
                 identifier
             }
             Node::Tabular(tab) => tab.identifier.clone(),
         };
-        match self.map.entry(identifier) {
+        match self.map.entry(identifier.to_string()) {
             Entry::Vacant(entry) => {
                 let idx = self.dag.add_node(node);
                 entry.insert(idx);
@@ -133,22 +128,29 @@ impl Dag {
             .map
             .get(a)
             .cloned()
-            .ok_or(Error::Text("Node not in graph.".to_string()))?;
+            .ok_or(Error::Text(format!("Node {} not in graph.", a)))?;
 
-        let b = match self.ingests.get(b) {
-            None => self
+        let bs = match self.ingests.get(&b.split(".").take(2).join(".")) {
+            None => vec![self
                 .map
                 .get(b)
                 .cloned()
-                .ok_or(Error::Text("Node not in graph.".to_string()))?,
-            Some(ident) => self
-                .map
-                .get(ident)
-                .cloned()
-                .ok_or(Error::Text("Node not in graph.".to_string()))?,
+                .ok_or(Error::Text(format!("Node {} not in graph.", b)))?],
+            Some(ingests) => ingests
+                .iter()
+                .map(|ident| {
+                    self.map
+                        .get(ident)
+                        .cloned()
+                        .ok_or(Error::Text(format!("Node {} not in graph.", ident)))
+                })
+                .collect::<Result<Vec<_>, Error>>()?,
         };
 
-        self.dag.add_edge(b, a, ());
+        for b in bs {
+            self.dag.add_edge(b, a, ());
+        }
+
         Ok(())
     }
 }

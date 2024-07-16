@@ -50,6 +50,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
                     let mut config_map = ConfigMap::default();
                     config_map.metadata.name = Some(
                         node.identifier
+                            .to_string()
                             .replace(['/', ':', '_', '.'], "-")
                             .to_lowercase()
                             .to_owned()
@@ -67,6 +68,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
                     ]));
                     config_maps.insert(
                         node.identifier
+                            .to_string()
                             .replace(['/', ':', '_', '.'], "-")
                             .to_lowercase()
                             .clone(),
@@ -76,7 +78,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
                     DagTaskBuilder::default()
                         .name(
                             node.identifier
-                                .clone()
+                                .to_string()
                                 .replace(['/', ':', '_', '.'], "-")
                                 .to_lowercase(),
                         )
@@ -89,7 +91,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
                                         .name("identifier".to_owned())
                                         .value(Some(
                                             node.identifier
-                                                .clone()
+                                                .to_string()
                                                 .replace(['/', ':', '_', '.'], "-")
                                                 .to_lowercase(),
                                         ))
@@ -104,6 +106,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
                     let mut config_map = ConfigMap::default();
                     config_map.metadata.name = Some(
                         node.identifier
+                            .to_string()
                             .replace(['/', ':', '_', '.'], "-")
                             .to_lowercase()
                             .to_owned()
@@ -111,10 +114,11 @@ pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
                     );
                     config_map.data = Some(BTreeMap::from_iter(vec![(
                         "refresh.json".to_owned(),
-                        plugin.refresh_config(&node.identifier, &node.branch)?,
+                        plugin.refresh_config(&node.identifier.to_string(), &node.branch)?,
                     )]));
                     config_maps.insert(
                         node.identifier
+                            .to_string()
                             .replace(['/', ':', '_', '.'], "-")
                             .to_lowercase()
                             .clone(),
@@ -124,7 +128,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
                     DagTaskBuilder::default()
                         .name(
                             node.identifier
-                                .clone()
+                                .to_string()
                                 .replace(['/', ':', '_', '.'], "-")
                                 .to_lowercase(),
                         )
@@ -137,7 +141,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
                                         .name("identifier".to_owned())
                                         .value(Some(
                                             node.identifier
-                                                .clone()
+                                                .to_string()
                                                 .replace(['/', ':', '_', '.'], "-")
                                                 .to_lowercase(),
                                         ))
@@ -152,6 +156,7 @@ pub fn workflow(plugin: Arc<dyn Plugin>, output: &str) -> Result<(), Error> {
                                 .map(|x| {
                                     dag.dag[x]
                                         .identifier()
+                                        .to_string()
                                         .replace(['/', ':', '_', '.'], "-")
                                         .to_lowercase()
                                         .to_owned()

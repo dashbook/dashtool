@@ -206,9 +206,7 @@ pub(super) async fn build_dag<'repo>(
                             _ => (),
                         }
 
-                        tabular_sender
-                            .send((identifier.to_string(), (sql, relations)))
-                            .await?;
+                        tabular_sender.send((identifier, (sql, relations))).await?;
                     }
                     Some(false) => {
                         let ingest_json: IngestConfig =
@@ -277,7 +275,7 @@ pub(super) async fn build_dag<'repo>(
                         let ingest_key = FullIdentifier::parse_path(Path::new(&path))?;
                         ingest_sender
                             .send(Node::Ingest(Ingest::new(
-                                &ingest_key.to_string(),
+                                &ingest_key,
                                 &image,
                                 source_json.clone(),
                                 destination_json,
@@ -297,7 +295,7 @@ pub(super) async fn build_dag<'repo>(
 
     let ingests = ingest_reciever.collect::<Vec<_>>().await;
 
-    let tabs: HashMap<String, (String, Vec<String>)> =
+    let tabs: HashMap<FullIdentifier, (String, Vec<String>)> =
         HashMap::from_iter(tabular_reciever.collect::<Vec<_>>().await);
 
     for ingest in ingests {
@@ -310,7 +308,7 @@ pub(super) async fn build_dag<'repo>(
 
     for (node, (_, children)) in tabs {
         for child in children {
-            dag.add_edge(&node, &child)?
+            dag.add_edge(&node.to_string(), &child)?
         }
     }
 
@@ -377,7 +375,6 @@ mod tests {
     	               "default_replication_method": "LOG_BASED"
                     },
                 "destination":{
-                        "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                         "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                         "bucket": "s3://example-postgres/",
                         "access_token": "$ACCESS_TOKEN",
@@ -427,12 +424,12 @@ mod tests {
 
         let orders = dag
             .ingests
-            .get("bronze.inventory.orders")
+            .get("bronze.inventory")
             .expect("Failed to get graph index");
 
-        assert_eq!(orders, "bronze.inventory.postgres");
+        assert_eq!(orders[0], "bronze.inventory.postgres");
 
-        let ingest = &dag.dag[*dag.map.get(orders).expect("Failed to get graph index")];
+        let ingest = &dag.dag[*dag.map.get(&orders[0]).expect("Failed to get graph index")];
 
         let Node::Ingest(ingest) = ingest else {
             panic!("Node is not an ingest")
@@ -472,7 +469,6 @@ mod tests {
     	               "default_replication_method": "LOG_BASED"
                     },
                 "destination":{
-                        "streams": {"inventory-orders": { "identifier": "bronze.inventory.orders" }},
                         "catalog": "https://api.dashbook.dev/nessie/cat-1w0qookj",
                         "bucket": "s3://example-postgres/",
                         "access_token": "$ACCESS_TOKEN",
@@ -627,7 +623,10 @@ mod tests {
             panic!("Node is not a tabular")
         };
 
-        assert_eq!(tabular.identifier, "silver.inventory.factOrder");
+        assert_eq!(
+            &tabular.identifier.to_string(),
+            "silver.inventory.factOrder"
+        );
 
         let catalog_list = plugin
             .catalog_list()

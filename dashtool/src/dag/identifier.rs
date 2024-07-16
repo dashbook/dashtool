@@ -2,10 +2,11 @@ use std::{fmt::Display, path::Path};
 
 use derive_getters::Getters;
 use iceberg_rust::catalog::identifier::Identifier;
+use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
 
-#[derive(Debug, Getters)]
+#[derive(Debug, Serialize, Deserialize, Clone, Hash, PartialEq, Eq, Getters)]
 pub(crate) struct FullIdentifier {
     catalog_name: String,
     namespace_name: String,
