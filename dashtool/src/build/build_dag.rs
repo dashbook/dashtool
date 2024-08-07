@@ -660,7 +660,7 @@ mod tests {
 
         assert_eq!(
             schema.fields()[1].name,
-            "SUM(bronze.inventory.orders.amount)"
+            "sum(bronze.inventory.orders.amount)"
         );
         assert_eq!(schema.fields()[1].field_type.to_string(), "long");
     }
