@@ -14,7 +14,7 @@ It handles Ingestion, Transformation and Orchestration.
 
 ## How it works
 
-![dashtool](dashtool.svg)
+![dashtool](dashtool_concept.svg)
 
 Dashtool constructs a DAG by analyzing all `.sql` files in a directory structure and creates an Iceberg Materialized View for every file.
 Each file contains a `SELECT` statement for the Materialized View definition.
@@ -72,13 +72,6 @@ dashtool apply
 ```
 
 ## Installation
-
-### Homebrew
-
-```shell
-brew tap dashbook/dashtool
-brew install dashtool
-```
 
 ### Cargo
 
