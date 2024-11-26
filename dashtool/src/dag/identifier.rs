@@ -77,10 +77,10 @@ impl FullIdentifier {
     }
 
     pub(crate) fn identifier(&self) -> Result<Identifier, Error> {
-        Ok(Identifier::try_new(&vec![
-            self.namespace_name.clone(),
-            self.table_name.clone(),
-        ])?)
+        Ok(Identifier::try_new(
+            &vec![self.namespace_name.clone(), self.table_name.clone()],
+            None,
+        )?)
     }
 }
 

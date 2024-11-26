@@ -79,9 +79,13 @@ pub(super) async fn build_dag<'repo>(
 
                         let catalog_name = identifier.catalog_name();
 
-                        let catalog = catalog_list.catalog(catalog_name).await.ok_or(
-                            IcebergError::NotFound("Catalog".to_string(), catalog_name.to_string()),
-                        )?;
+                        let catalog =
+                            catalog_list
+                                .catalog(catalog_name)
+                                .ok_or(IcebergError::NotFound(
+                                    "Catalog".to_string(),
+                                    catalog_name.to_string(),
+                                ))?;
 
                         let sql = fs::read_to_string(&path)?;
                         let relations = find_relations(&sql)?;
@@ -229,7 +233,6 @@ pub(super) async fn build_dag<'repo>(
                                     .to_str()
                                     .ok_or(Error::Text("Catalog name not present.".to_owned()))?,
                             )
-                            .await
                             .ok_or(Error::Text(format!("Catalog not found in catalog list",)))?;
 
                         let namespace = Namespace::try_new(&[namespace_name
@@ -326,17 +329,20 @@ mod tests {
     };
 
     use gix::{diff::tree::recorder::Change, objs::tree::EntryKind, ObjectId};
-    use iceberg_rust::spec::{
-        partition::{PartitionField, PartitionSpecBuilder, Transform},
-        schema::SchemaBuilder,
-        types::{PrimitiveType, StructField, StructTypeBuilder, Type},
+    use iceberg_rust::{
+        catalog::bucket::ObjectStoreBuilder,
+        spec::{
+            partition::{PartitionField, PartitionSpecBuilder, Transform},
+            schema::SchemaBuilder,
+            types::{PrimitiveType, StructField, StructTypeBuilder, Type},
+        },
     };
     use iceberg_rust::{
         catalog::{identifier::Identifier, tabular::Tabular, CatalogList},
         table::Table,
     };
     use iceberg_sql_catalog::SqlCatalogList;
-    use object_store::memory::InMemory;
+
     use tempfile::TempDir;
 
     use crate::{
@@ -516,17 +522,16 @@ mod tests {
 
         let mut dag = update_dag(&vec![], None, "main").expect("Failed to create dag");
 
-        let object_store = Arc::new(InMemory::new());
+        let object_store = ObjectStoreBuilder::memory();
 
         let catalog_list = Arc::new(
-            SqlCatalogList::new("sqlite://", object_store.clone())
+            SqlCatalogList::new("sqlite://", object_store)
                 .await
                 .expect("Failed to create catalog list"),
         );
 
         let bronze_catalog = catalog_list
             .catalog("bronze")
-            .await
             .expect("Failed to create catalog");
 
         let schema = SchemaBuilder::default()
@@ -635,12 +640,12 @@ mod tests {
 
         let catalog = catalog_list
             .catalog("silver")
-            .await
             .expect("Failed to get catalog");
 
         let matview = if let Tabular::MaterializedView(matview) = catalog
             .load_tabular(
-                &Identifier::parse("inventory.factOrder").expect("Failed to parse identifier"),
+                &Identifier::parse("inventory.factOrder", None)
+                    .expect("Failed to parse identifier"),
             )
             .await
             .expect("Failed to load table")

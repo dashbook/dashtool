@@ -7,9 +7,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
 use async_trait::async_trait;
-use iceberg_rust::catalog::CatalogList;
+use iceberg_rust::catalog::{bucket::ObjectStoreBuilder, CatalogList};
 use iceberg_sql_catalog::SqlCatalogList;
-use object_store::{aws::AmazonS3Builder, memory::InMemory, ObjectStore};
+use object_store::aws::AmazonS3Builder;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
@@ -40,8 +40,8 @@ pub struct SqlPlugin {
 impl SqlPlugin {
     pub async fn new(mut config: SqlConfig) -> Result<Self, Error> {
         let mut full_bucket_name = config.bucket.clone();
-        let object_store: Arc<dyn ObjectStore> = match &config.object_store {
-            ObjectStoreConfig::Memory => Arc::new(InMemory::new()),
+        let object_store = match &config.object_store {
+            ObjectStoreConfig::Memory => ObjectStoreBuilder::memory(),
             ObjectStoreConfig::S3(s3_config) => {
                 let bucket_name = config.bucket.trim_start_matches("s3://");
                 full_bucket_name = "s3://".to_owned() + bucket_name;
@@ -59,7 +59,7 @@ impl SqlPlugin {
                     builder = builder.with_allow_http(allow_http.parse()?);
                 }
 
-                Arc::new(builder.build()?)
+                ObjectStoreBuilder::S3(builder)
             }
         };
 
