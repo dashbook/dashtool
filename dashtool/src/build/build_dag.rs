@@ -320,6 +320,7 @@ pub(super) async fn build_dag<'repo>(
 
 #[cfg(test)]
 mod tests {
+    use core::panic;
     use std::{
         env,
         fs::{self, File},
@@ -413,6 +414,7 @@ mod tests {
 
         let config = match serde_json::from_str(&config_json).expect("Failed to parse sql config") {
             Config::Sql(config) => config,
+            Config::File(_) => panic!("Wrong config"),
         };
 
         let plugin = Arc::new(
@@ -606,6 +608,7 @@ mod tests {
         .expect("Failed to parse sql config")
         {
             Config::Sql(config) => config,
+            Config::File(_) => panic!("Wrong config"),
         };
 
         let plugin = Arc::new(

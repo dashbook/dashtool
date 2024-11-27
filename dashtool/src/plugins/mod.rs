@@ -2,6 +2,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
 use async_trait::async_trait;
+use file::FileConfig;
 use iceberg_rust::catalog::CatalogList;
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +10,7 @@ use crate::error::Error;
 
 use self::sql::SqlConfig;
 
+pub mod file;
 pub mod sql;
 
 #[async_trait]
@@ -27,4 +29,5 @@ pub trait Plugin: Debug {
 #[serde(tag = "plugin", rename_all = "lowercase")]
 pub enum Config {
     Sql(SqlConfig),
+    File(FileConfig),
 }

@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use dashtool::{
     build::build,
     error::Error,
-    plugins::{sql::SqlPlugin, Config, Plugin},
+    plugins::{file::FilePlugin, sql::SqlPlugin, Config, Plugin},
     workflow::workflow,
 };
 
@@ -58,6 +58,9 @@ async fn main() -> Result<(), Error> {
     let plugin: Arc<dyn Plugin> = match config {
         Config::Sql(sql_config) => {
             Ok::<_, Error>(Arc::new(SqlPlugin::new(sql_config).await?) as Arc<dyn Plugin>)
+        }
+        Config::File(file_config) => {
+            Ok::<_, Error>(Arc::new(FilePlugin::new(file_config).await?) as Arc<dyn Plugin>)
         }
     }?;
 
