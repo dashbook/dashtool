@@ -31,10 +31,10 @@ jobs:
           command: "build"
           target: ${{ matrix.platform.target }}
           args: "--locked --release"
-          working-directory: dashbook
+          working-directory: dashtool
       - name: Publish artifacts and release
         uses: houseabsolute/actions-rust-release@v0
         with:
-          executable-name: dashbook
+          executable-name: dashtool
           target: ${{ matrix.platform.target }}
           extra-files: ""
