@@ -5,15 +5,36 @@ on:
       - "v*"
 jobs:
   release:
-    runs-on: ${{ matrix.os }}
+    name: Release - ${{ matrix.platform.os-name }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        platform:
+          - os-name: Linux-x86_64
+            runs-on: ubuntu-20.04
+            target: x86_64-unknown-linux-gnu
+
+          - os-name: Windows-x86_64
+            runs-on: windows-latest
+            target: x86_64-pc-windows-msvc
+
+          - os-name: macOS-x86_64
+            runs-on: macOS-latest
+            target: x86_64-apple-darwin
+
+    runs-on: ${{ matrix.platform.runs-on }}
     steps:
-      - uses: actions/checkout@v4
-      - name: test build rust project
-        uses: lxl66566/rust-simple-release@main
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Build binary
+        uses: houseabsolute/actions-rust-cross@v0
         with:
-          targets: x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu, x86_64-apple-darwin
-          token: ${{ secrets.GITHUB_TOKEN }}
-          package: dashtool
+          command: ${{ matrix.platform.command }}
+          target: ${{ matrix.platform.target }}
+          args: "--locked --release"
+          working-directory: dashbook
+      - name: Publish artifacts and release
+        uses: houseabsolute/actions-rust-release@v0
+        with:
+          executable-name: dashbook
+          target: ${{ matrix.platform.target }}
+          extra-files: ""
