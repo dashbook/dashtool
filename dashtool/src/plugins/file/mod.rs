@@ -3,12 +3,12 @@ use argo_workflow::schema::{
     VolumeMountBuilder,
 };
 use dashtool_common::ObjectStoreConfig;
+use iceberg_file_catalog::FileCatalogList;
 use std::{collections::HashMap, sync::Arc};
 
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
 use async_trait::async_trait;
 use iceberg_rust::catalog::{bucket::ObjectStoreBuilder, CatalogList};
-use iceberg_sql_catalog::SqlCatalogList;
 use object_store::aws::AmazonS3Builder;
 use serde::{Deserialize, Serialize};
 
@@ -65,7 +65,7 @@ impl FilePlugin {
 
         config.bucket = full_bucket_name;
 
-        let catalog_list = Arc::new(SqlCatalogList::new(&config.catalog_url, object_store).await?);
+        let catalog_list = Arc::new(FileCatalogList::new(&config.catalog_url, object_store).await?);
 
         Ok(FilePlugin {
             config,

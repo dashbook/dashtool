@@ -21,6 +21,8 @@ pub enum Error {
     #[error(transparent)]
     IcebergSqlCatalog(#[from] iceberg_sql_catalog::error::Error),
     #[error(transparent)]
+    IcebergFileCatalog(#[from] iceberg_file_catalog::error::Error),
+    #[error(transparent)]
     GitDiscover(#[from] gix::discover::Error),
     #[error(transparent)]
     GitReference(#[from] gix::reference::find::Error),
