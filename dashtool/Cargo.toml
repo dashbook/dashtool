@@ -13,19 +13,19 @@ repository = "https://github.com/dashbook/dashtool"
 argo-workflow = "0.1"
 clap = { version = "=4.4", features = ["derive"] }
 dashtool-common = "0.1"
-datafusion-iceberg-sql = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5" }
+datafusion-iceberg-sql = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5", branch = "copy-if-not-exists"   }
 datafusion-sql = "43.0.0"
 datafusion-common = "43.0.0"
-iceberg-rust = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5" }
-iceberg-rest-catalog = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5" }
-iceberg-sql-catalog = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5" }
-iceberg-file-catalog = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5" }
-iceberg-glue-catalog = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5" }
+iceberg-rust = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5", branch = "copy-if-not-exists"   }
+iceberg-rest-catalog = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5", branch = "copy-if-not-exists"   }
+iceberg-sql-catalog = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5", branch = "copy-if-not-exists"   }
+iceberg-file-catalog = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5", branch = "copy-if-not-exists"   }
+iceberg-glue-catalog = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5", branch = "copy-if-not-exists"   }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlparser = { version = "0.51", features = ["visitor"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "any", "sqlite", "postgres", "mysql"], default-features = false }
-object_store = "0.11.0"
+object_store = "0.11.1"
 openidconnect = "3.3"
 openssl = { version = "0.10", features = ["vendored"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
@@ -52,3 +52,6 @@ getrandom = "=0.2.10"
 
 [dev-dependencies]
 tempfile = "3.8.1"
+
+[patch.crates-io]
+object_store = { version = "0.11.1", features = ["cloud"], git = "https://github.com/apache/arrow-rs", rev = "c60ce14" }
