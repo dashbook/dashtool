@@ -12,30 +12,30 @@ repository = "https://github.com/dashbook/dashtool"
 [dependencies]
 argo-workflow = "0.1"
 clap = { version = "=4.4", features = ["derive"] }
-dashtool-common = "0.1"
-datafusion-iceberg-sql = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5", branch = "copy-if-not-exists"   }
-datafusion-sql = "43.0.0"
-datafusion-common = "43.0.0"
-iceberg-rust = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5", branch = "copy-if-not-exists"   }
-iceberg-rest-catalog = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5", branch = "copy-if-not-exists"   }
-iceberg-sql-catalog = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5", branch = "copy-if-not-exists"   }
-iceberg-file-catalog = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5", branch = "copy-if-not-exists"   }
-iceberg-glue-catalog = { git = "https://github.com/jankaul/iceberg-rust", version = "0.5", branch = "copy-if-not-exists"   }
+dashtool-common = { version = "0.2.0", path = "../dashtool-common/" }
+datafusion-iceberg-sql = "0.9.0"
+datafusion-sql = "50.0.0"
+datafusion-common = "50.0.0"
+iceberg-rust = "0.9.0"
+iceberg-rest-catalog = "0.9.0"
+iceberg-sql-catalog = "0.9.0"
+iceberg-file-catalog = "0.9.0"
+iceberg-glue-catalog = "0.9.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
-sqlparser = { version = "0.51", features = ["visitor"] }
+sqlparser = { version = "0.58", features = ["visitor"] }
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "any", "sqlite", "postgres", "mysql"], default-features = false }
-object_store = "0.11.1"
+object_store = "0.12"
 openidconnect = "3.3"
 openssl = { version = "0.10", features = ["vendored"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 futures = "0.3.30"
 thiserror = "1"
-reqwest = { version = "0.11", features = ["rustls"], default-features = false }
+reqwest = { version = "0.12" }
 url = "2.4"
 anyhow = "1"
 petgraph = { version = "0.6", features = ["serde-1"] }
-arrow-schema = "53.2.0"
+arrow-schema = "56.2.0"
 serde_yaml = "0.9.25"
 async-trait = "0.1"
 derive-getters = "0.3.0"

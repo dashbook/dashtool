@@ -13,7 +13,7 @@ pub enum ObjectStoreConfig {
 /// Config for the s3 object-store. The secret_access_key is read from the environment variable
 /// AWS_SECRET_ACCESS_KEY
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "snake_case")]
 pub struct S3Config {
     pub aws_access_key_id: String,
     pub aws_region: String,

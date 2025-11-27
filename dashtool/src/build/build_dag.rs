@@ -4,6 +4,7 @@ use datafusion_iceberg_sql::schema::get_schema;
 use futures::{channel::mpsc::unbounded, stream, SinkExt, StreamExt, TryStreamExt};
 use gix::diff::tree::recorder::Change;
 use iceberg_rust::catalog::namespace::Namespace;
+use iceberg_rust::spec::schema::{Schema, DEFAULT_SCHEMA_ID};
 use iceberg_rust::spec::view_metadata::{Version, ViewRepresentation};
 use iceberg_rust::{
     catalog::tabular::Tabular as IcebergTabular, error::Error as IcebergError, sql::find_relations,
@@ -11,7 +12,6 @@ use iceberg_rust::{
 use iceberg_rust::{
     materialized_view::MaterializedView,
     spec::{
-        schema::SchemaBuilder,
         snapshot::{SnapshotReference, SnapshotRetention},
         view_metadata::REF_PREFIX,
     },
@@ -79,13 +79,9 @@ pub(super) async fn build_dag<'repo>(
 
                         let catalog_name = identifier.catalog_name();
 
-                        let catalog =
-                            catalog_list
-                                .catalog(catalog_name)
-                                .ok_or(IcebergError::NotFound(
-                                    "Catalog".to_string(),
-                                    catalog_name.to_string(),
-                                ))?;
+                        let catalog = catalog_list
+                            .catalog(catalog_name)
+                            .ok_or(IcebergError::NotFound(format!("Catalog {}", &catalog_name)))?;
 
                         let sql = fs::read_to_string(&path)?;
                         let relations = find_relations(&sql)?;
@@ -122,10 +118,10 @@ pub(super) async fn build_dag<'repo>(
                                 let snapshot_id = *storage_table
                                     .metadata()
                                     .current_snapshot(Some(merged_branch))?
-                                    .ok_or(Error::Iceberg(IcebergError::NotFound(
-                                        "Snapshot id".to_string(),
-                                        "branch".to_string() + merged_branch,
-                                    )))?
+                                    .ok_or(Error::Iceberg(IcebergError::NotFound(format!(
+                                        "Snapshot for branch {}",
+                                        &merged_branch
+                                    ))))?
                                     .snapshot_id();
                                 storage_table
                                     .new_transaction(Some(merged_branch))
@@ -176,10 +172,8 @@ pub(super) async fn build_dag<'repo>(
                                 )
                                 .await?;
 
-                                let schema = SchemaBuilder::default()
-                                    .with_fields(fields)
-                                    .build()
-                                    .map_err(iceberg_rust::spec::error::Error::from)?;
+                                let schema =
+                                    Schema::from_struct_type(fields, DEFAULT_SCHEMA_ID, None);
 
                                 let base_path = plugin
                                     .bucket(catalog_name)
@@ -201,7 +195,7 @@ pub(super) async fn build_dag<'repo>(
                                                 &sql, None,
                                             ))
                                             .build()
-                                            .map_err(IcebergError::from)?,
+                                            .unwrap(),
                                     )
                                     .with_property((REF_PREFIX.to_string() + branch, 0.to_string()))
                                     .build(identifier.identifier()?.namespace(), catalog)
@@ -257,10 +251,10 @@ pub(super) async fn build_dag<'repo>(
                                 let snapshot_id = *table
                                     .metadata()
                                     .current_snapshot(Some(merged_branch))?
-                                    .ok_or(Error::Iceberg(IcebergError::NotFound(
-                                        "Snapshot id".to_string(),
-                                        "branch".to_string() + merged_branch,
-                                    )))?
+                                    .ok_or(Error::Iceberg(IcebergError::NotFound(format!(
+                                        "Snapshot for branch {}",
+                                        &merged_branch
+                                    ))))?
                                     .snapshot_id();
                                 table
                                     .new_transaction(Some(merged_branch))
@@ -331,16 +325,16 @@ mod tests {
 
     use gix::{diff::tree::recorder::Change, objs::tree::EntryKind, ObjectId};
     use iceberg_rust::{
-        catalog::bucket::ObjectStoreBuilder,
+        catalog::{identifier::Identifier, tabular::Tabular, CatalogList},
+        table::Table,
+    };
+    use iceberg_rust::{
+        object_store::ObjectStoreBuilder,
         spec::{
             partition::{PartitionField, PartitionSpecBuilder, Transform},
             schema::SchemaBuilder,
-            types::{PrimitiveType, StructField, StructTypeBuilder, Type},
+            types::{PrimitiveType, StructField, Type},
         },
-    };
-    use iceberg_rust::{
-        catalog::{identifier::Identifier, tabular::Tabular, CatalogList},
-        table::Table,
     };
     use iceberg_sql_catalog::SqlCatalogList;
 
@@ -537,46 +531,41 @@ mod tests {
             .expect("Failed to create catalog");
 
         let schema = SchemaBuilder::default()
-            .with_fields(
-                StructTypeBuilder::default()
-                    .with_struct_field(StructField {
-                        id: 1,
-                        name: "id".to_string(),
-                        required: true,
-                        field_type: Type::Primitive(PrimitiveType::Long),
-                        doc: None,
-                    })
-                    .with_struct_field(StructField {
-                        id: 2,
-                        name: "customer_id".to_string(),
-                        required: true,
-                        field_type: Type::Primitive(PrimitiveType::Long),
-                        doc: None,
-                    })
-                    .with_struct_field(StructField {
-                        id: 3,
-                        name: "product_id".to_string(),
-                        required: true,
-                        field_type: Type::Primitive(PrimitiveType::Long),
-                        doc: None,
-                    })
-                    .with_struct_field(StructField {
-                        id: 4,
-                        name: "date".to_string(),
-                        required: true,
-                        field_type: Type::Primitive(PrimitiveType::Date),
-                        doc: None,
-                    })
-                    .with_struct_field(StructField {
-                        id: 5,
-                        name: "amount".to_string(),
-                        required: true,
-                        field_type: Type::Primitive(PrimitiveType::Int),
-                        doc: None,
-                    })
-                    .build()
-                    .unwrap(),
-            )
+            .with_struct_field(StructField {
+                id: 1,
+                name: "id".to_string(),
+                required: true,
+                field_type: Type::Primitive(PrimitiveType::Long),
+                doc: None,
+            })
+            .with_struct_field(StructField {
+                id: 2,
+                name: "customer_id".to_string(),
+                required: true,
+                field_type: Type::Primitive(PrimitiveType::Long),
+                doc: None,
+            })
+            .with_struct_field(StructField {
+                id: 3,
+                name: "product_id".to_string(),
+                required: true,
+                field_type: Type::Primitive(PrimitiveType::Long),
+                doc: None,
+            })
+            .with_struct_field(StructField {
+                id: 4,
+                name: "date".to_string(),
+                required: true,
+                field_type: Type::Primitive(PrimitiveType::Date),
+                doc: None,
+            })
+            .with_struct_field(StructField {
+                id: 5,
+                name: "amount".to_string(),
+                required: true,
+                field_type: Type::Primitive(PrimitiveType::Int),
+                doc: None,
+            })
             .build()
             .unwrap();
 

@@ -7,7 +7,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use argo_workflow::schema::{IoArgoprojWorkflowV1alpha1UserContainer, IoK8sApiCoreV1Volume};
 use async_trait::async_trait;
-use iceberg_rust::catalog::{bucket::ObjectStoreBuilder, CatalogList};
+use iceberg_rust::{catalog::CatalogList, object_store::ObjectStoreBuilder};
 use iceberg_sql_catalog::SqlCatalogList;
 use object_store::aws::AmazonS3Builder;
 use serde::{Deserialize, Serialize};
@@ -59,7 +59,7 @@ impl SqlPlugin {
                     builder = builder.with_allow_http(allow_http.parse()?);
                 }
 
-                ObjectStoreBuilder::S3(builder)
+                ObjectStoreBuilder::S3(Box::new(builder))
             }
         };
 
